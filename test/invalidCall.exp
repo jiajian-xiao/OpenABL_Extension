@@ -1,0 +1,2 @@
+Function called with invalid arguments: foo(), expected foo(int) on line 6
+Function called with invalid arguments: foo(float3), expected foo(int) on line 7

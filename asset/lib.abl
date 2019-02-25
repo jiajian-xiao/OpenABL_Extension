@@ -1,0 +1,113 @@
+//
+// Constants
+//
+
+float PI = 3.14159265358979323846;
+
+//
+// Random Number Generation
+//
+// The functions
+//   float random(float, float)
+//   int randomInt(int, int)
+// are defined by the backend. Here we only define helper functions on top of
+// these primitives.
+
+float2 random(float2 min, float2 max) {
+  return float2(
+    random(min.x, max.x),
+    random(min.y, max.y)
+  );
+}
+float3 random(float3 min, float3 max) {
+  return float3(
+    random(min.x, max.x),
+    random(min.y, max.y),
+    random(min.z, max.z)
+  );
+}
+
+float random(float max) {
+  return random(0, max);
+}
+float2 random(float2 max) {
+  return random(float2(0), max);
+}
+float3 random(float3 max) {
+  return random(float3(0), max);
+}
+
+int randomInt(int max) {
+  return randomInt(0, max);
+}
+
+// claming
+
+float clam(float pos, float min, float max) {
+  return pos < min ? min : pos > max ? max : pos;
+}
+float2 clam(float2 pos, float2 min, float2 max) {
+  return float2(
+    pos.x < min.x ? min.x : pos.x > max.x ? max.x : pos.x,
+    pos.y < min.y ? min.y : pos.y > max.y ? max.y : pos.y,
+  );
+}
+float3 clam(float3 pos, float3 min, float3 max) {
+  return float3(
+    pos.x < min.x ? min.x : pos.x > max.x ? max.x : pos.x,
+    pos.y < min.y ? min.y : pos.y > max.y ? max.y : pos.y,
+    pos.z < min.z ? min.z : pos.z > max.z ? max.z : pos.z,
+  );
+}
+
+float clam(float pos, float max) {
+  return clam(pos, 0, max);
+}
+float2 clam(float2 pos, float2 max) {
+  return clam(pos, float2(0), max);
+}
+float3 clam(float3 pos, float3 max) {
+  return clam(pos, float3(0), max);
+}
+
+// For wraparound the semantics are:
+// min is inclusive and max is exclusive
+
+float wraparound(float pos, float max) {
+  return pos < 0 ? max + pos : pos >= max ? pos - max : pos;
+}
+
+float2 wraparound(float2 pos, float2 max) {
+  return float2(
+    pos.x < 0 ? max.x + pos.x : pos.x >= max.x ? pos.x - max.x : pos.x,
+    pos.y < 0 ? max.y + pos.y : pos.y >= max.y ? pos.y - max.y : pos.y,
+  );
+}
+float3 wraparound(float3 pos, float3 max) {
+  return float3(
+    pos.x < 0 ? max.x + pos.x : pos.x >= max.x ? pos.x - max.x : pos.x,
+    pos.y < 0 ? max.y + pos.y : pos.y >= max.y ? pos.y - max.y : pos.y,
+    pos.z < 0 ? max.z + pos.z : pos.z >= max.z ? pos.z - max.z : pos.z,
+  );
+}
+
+bool is_inside(float2 pos, float2 max) {
+  return pos.x >= 0 && pos.y >= 0 && pos.x <= max.x && pos.y <= max.y;
+}
+
+bool isSortNeeded(int p1, int p2) {
+    if ((p1 > p2)) return true;
+
+    return false;
+}
+bool isSortNeeded(float2 p1, float2 p2) {
+    if (p1.x > p2.x) return true;
+    if (p1.x == p2.x) {
+        if (p1.y > p2.y) {
+            return true;
+        }
+    }
+    return false;
+}
+
+

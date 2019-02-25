@@ -1,0 +1,282 @@
+/* Copyright 2017 OpenABL Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License. */
+
+agent Point {
+    float velocity;
+    position float2 pos;
+    int id;
+    bool isFinished;
+}
+
+Lane {
+    int laneId;
+    float length;
+    int speedLimit;
+    int nextLaneId;
+    int leftLaneId;
+    int rightLaneId;
+}
+
+param int num_timesteps = 100;
+param int num_agents = 512;
+
+param float dt = 250;
+param float size = 3.5;
+
+
+// Specify environment size
+environment {
+  max: float2(1000000),
+  env: Lane roads[4096]
+}
+
+step car_follow(Point in -> out) {
+    float desired_velocity = roads[in.pos.x].speedLimit;
+    float ratio = 0.0;
+    float free_road_term = 0.0;
+
+    if (in.velocity < desired_velocity)
+    {
+        ratio = in.velocity/desired_velocity;
+        free_road_term = 1.8 * (1 - pow(ratio, 4));
+    } else {
+        ratio = desired_velocity/in.velocity;
+        free_road_term = -2.0 * (1 - pow(ratio, 4));
+    }
+
+    float interaction_term = 0.0;
+    bool found = false;
+
+    Lane current = roads[in.pos.x];
+    for (Point nx:on(current)) {
+        if (nx.pos.y > in.pos.y)
+        {
+            float dV = in.velocity - nx.velocity;
+            float temp = in.velocity * 1.5 + ((in.velocity * dV) / 3.79);
+            float ss = 2.0 + temp;
+            float pos_dist = nx.pos.y - in.pos.y;
+            interaction_term = ((-1.8) * pow((ss / pos_dist), 2.0));
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        Lane next = roads[roads[in.pos.x].nextLaneId];
+        for (Point nx:on(next)) {
+            float dV = (in.velocity - nx.velocity);
+            float temp = ((in.velocity * 1.5) + ((in.velocity * dV) / 3.79));
+            float ss = (2.0 + temp);
+            float pos_dist = (nx.pos.y);
+            interaction_term = ((-1.8) * pow((ss / pos_dist), 2.0));
+            break;
+        }
+    }
+
+    float acceleration = free_road_term + interaction_term;
+    out.velocity = in.velocity + acceleration*(dt/1000.0);
+    if (out.velocity < 0) out.velocity=0;
+
+    out.pos.y = in.pos.y + out.velocity*(dt/1000.0);
+    if (out.pos.y > roads[out.pos.x].length) {
+        if (roads[out.pos.x].nextLaneId != -1)
+        {
+            out.pos.x = roads[in.pos.x].nextLaneId;
+            out.pos.y = out.pos.y - roads[out.pos.x].length;
+        } else {
+            out.isFinished = true;
+        }
+    }
+}
+
+step lane_change(Point in -> out) {
+    if (in.pos.x != out.pos.x)
+        return;
+
+    float dis_rear = -50.0;
+    float dis_front = 50.0;
+    float dis_rear_left = -50.0;
+    float dis_front_left = 50.0;
+    float dis_rear_right = -50.0;
+    float dis_front_right = 50.0;
+
+    float vel_rear = 0.0;
+    float vel_front = 30.0;
+    float vel_rear_left = 0.0;
+    float vel_front_left = 30.0;
+    float vel_rear_right = 0.0;
+    float vel_front_right = 30.0;
+
+    float dis_tmp_right = 0.0;
+    float dis_tmp_left = 0.0;
+    float dis_tmp = 0.0;
+
+    if ((roads[in.pos.x].leftLaneId != -1)) {
+        Lane left = roads[roads[in.pos.x].leftLaneId];
+        for (Point nx:on(left)){
+            dis_tmp_left = (nx.pos.y - in.pos.y);
+            if (((dis_tmp_left > 0) && (dis_tmp_left < dis_front_left))) {
+                dis_front_left = dis_tmp_left-size;
+                vel_front_left = nx.velocity;
+            }
+            if (((dis_tmp_left < 0) && (dis_tmp_left > dis_rear_left))) {
+                dis_rear_left = dis_tmp_left+size;
+                vel_rear_left = nx.velocity;
+            }
+        }
+    }
+
+    if (roads[in.pos.x].rightLaneId != -1) {
+        Lane right = roads[roads[in.pos.x].rightLaneId];
+        for (Point nx:on(right)){
+            dis_tmp_right = (nx.pos.y - in.pos.y);
+            if (((dis_tmp_right > 0) && (dis_tmp_right < dis_front_right))) {
+                dis_front_right = dis_tmp_right-size;
+                vel_front_right = nx.velocity;
+            }
+            if (((dis_tmp_right < 0) && (dis_tmp_right > dis_rear_right))) {
+                dis_rear_right = dis_tmp_right+size;
+                vel_rear_right = nx.velocity;
+            }
+        }
+
+    }
+
+    Lane current = roads[in.pos.x];
+    for (Point nx:on(current))
+    {
+        dis_tmp = (nx.pos.y - in.pos.y);
+        if (((dis_tmp > 0) && (dis_tmp < dis_front))) {
+            dis_front = dis_tmp-size;
+            vel_front = nx.velocity;
+        }
+        if (((dis_tmp < 0) && (dis_tmp > dis_rear))) {
+            dis_rear = dis_tmp+size;
+            vel_rear = nx.velocity;
+        }
+    }
+
+    float con_e = 2.71828182;
+
+    float a_l = (25.0* in.velocity * (vel_front_left - in.velocity))/(dis_front_left*dis_front_left);
+    float a_c = (25.0* in.velocity * (vel_front - in.velocity))/(dis_front*dis_front);
+    float a_r = (25.0* in.velocity * (vel_front_right - in.velocity))/(dis_front_right*dis_front_right);
+
+    float p_a_l = pow(con_e, a_l);
+    float p_a_c = pow(con_e, a_c);
+    float p_a_r = pow(con_e, a_r);
+
+    float p_base = p_a_l + p_a_c + p_a_r;
+
+    float p_l = p_a_l/p_base;
+    float p_c = p_a_c/p_base;
+    float p_r = p_a_r/p_base;
+
+    float a_rear_l = (25.0*vel_rear_left*(in.velocity - vel_rear_left))/(dis_rear_left*dis_rear_left);
+    float a_rear_r = (25.0*vel_rear_right*(in.velocity - vel_rear_right))/(dis_rear_right*dis_rear_right);
+
+    float aa = -0.78*(dis_front_right/in.velocity -0.7);
+    float bb = -0.78*(-dis_rear_right/in.velocity -0.7);
+
+    float p_right_lead = 1 - pow(con_e, aa);
+    float p_right_lag = 1 - pow(con_e, bb);
+    float p_right = p_right_lead*p_right_lag;
+    if (dis_rear_right > -(size) || dis_front_right < size)
+        p_right = 0;
+
+    float cc = -0.78*(dis_front_left/in.velocity -0.7);
+    float dd = -0.78*(-dis_rear_left/in.velocity -0.7);
+
+    float p_left_lead = 1 - pow(con_e, cc);
+    float p_left_lag = 1 - pow(con_e, dd);
+    float p_left = p_left_lead*p_left_lag;
+    if (dis_rear_left > -(size) || dis_front_left < size)
+        p_left = 0;
+
+    float rnd1 = MWC64X(1.0);
+    float rnd2 = MWC64X(1.0);
+
+    if (rnd1 <= p_l && a_rear_l > -2.0 && rnd2 <= p_left)
+    {
+        if (roads[in.pos.x].leftLaneId != -1)
+        {
+            out.pos.x = roads[in.pos.x].leftLaneId;
+        }
+    } else if (rnd1 <= p_r+p_l && a_rear_r > -2.0 && rnd2 <= p_right){
+        if (roads[in.pos.x].rightLaneId != -1)
+        {
+            out.pos.x = roads[in.pos.x].rightLaneId;
+        }
+    } else {
+        out.pos.x = in.pos.x;
+    }
+}
+bool tie_breaking(Point ag1, Point ag2){
+   if (ag2.pos.y > ag1.pos.y && ag2.pos.y - ag1.pos.y <= size)
+        return true;
+   else
+        return false;
+}
+void main() {
+  // initialization (sequential)
+    int lan = 1;
+    int posit = 4;
+    for (int i : 0..num_agents) {
+        add(Point {
+            velocity:1,
+            pos: float2(lan,posit),
+            id: i,
+            isFinished:false
+        });
+        posit = posit + 4;
+        if (posit > 200) {
+            posit = 0;
+            lan = lan +1;
+        }
+    }
+
+    for (int p : 1..2048){
+        if (p<2046) {
+           int next = p+3;
+           int left = ( p%3 == 1) ? (-1):p-1;
+           int right = (p%3 == 0) ? (-1):(p + 1);
+
+            Lane lane = Lane {
+                laneId:p,
+                length:500,
+                speedLimit:30,
+                nextLaneId:next,
+                leftLaneId:left,
+                rightLaneId:right
+            };
+            roads[p] = lane;
+        } else {
+             Lane lane = Lane {
+                laneId:p,
+                length:500,
+                speedLimit:30,
+                nextLaneId:-1,
+                leftLaneId:-1,
+                rightLaneId:-1
+            };
+
+            roads[p] = lane;
+        }
+    }
+
+    // simulation (parallel)
+    simulate(num_timesteps) { car_follow(1), lane_change(0) }
+    conflictresolver {roads, NULL, tie_breaking}
+}
+

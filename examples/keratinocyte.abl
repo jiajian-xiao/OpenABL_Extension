@@ -1,0 +1,483 @@
+/* Copyright 2017 OpenABL Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License. */
+
+/* Incomplete Keratinocyte model adapted from.
+ * https://github.com/FLAMEGPU/FLAMEGPU/blob/master/examples/Keratinocyte/src/model
+ */
+
+agent Keratinocyte {
+  int type;
+  position float3 pos;
+  float3 force;
+  int num_xy_bonds;
+  int num_z_bonds;
+  int num_stem_bonds;
+  int cycle;
+  float diff_noise_factor;
+  int dead_ticks;
+  int contact_inhibited_ticks;
+  float motility;
+  float dir;
+  float movement; // Only used in force messages
+}
+
+float K_WIDTH = 20;
+float FORCE_IRADIUS = 10;
+float BASEMENT_MAX_Z = 5;
+
+int MAX_TO_G0_CONTACT_INHIBITED_TICKS = 300;
+int MAX_DEAD_TICKS = 600;
+int MAX_NUM_LATERAL_BONDS = 4;
+
+int CYCLE_LENGTH[] = { 120, 60, 0, 0, 120 };
+
+float FORCE_REP = 0.5;
+float FORCE_DAMPENER = 0.4;
+float SUBSTRATE_FORCE[] = { 0.3, 0.1, 0.2, 0.1, 0.3 };
+float DOWNWARD_FORCE[] = { 0.1, 0.6, 0.3, 0.6, 0.1 };
+float FORCE_MATRIX[] = {
+  0.06, 0.01, 0.01, 0.01, 0.0,
+  0.01, 0.01, 0.01, 0.01, 0.0,
+  0.01, 0.01, 0.06, 0.01, 0.0,
+  0.01, 0.01, 0.01, 0.08, 0.0,
+  0.01, 0.01, 0.01, 0.08, 0.0,
+};
+
+float calcium_level = 1.3;
+
+// Enum?
+int K_TYPE_STEM  = 0;
+int K_TYPE_TA    = 1;
+int K_TYPE_COMM  = 2;
+int K_TYPE_CORN  = 3;
+int K_TYPE_HACAT = 4;
+
+param int num_agents = 100;
+param int num_timesteps = 100;
+
+// Keep a constant initial agent density
+float SURFACE_WIDTH = 50 * sqrt(num_agents);
+
+environment {
+  max: float3(SURFACE_WIDTH, SURFACE_WIDTH, 100)
+}
+
+int getColor(Keratinocyte k) {
+  if (k.type == K_TYPE_STEM) {
+    return 0x000000;
+  } else if (k.type == K_TYPE_TA) {
+    return 0xff0000;
+  } else if (k.type == K_TYPE_COMM) {
+    return 0x00ff00;
+  } else if (k.type == K_TYPE_CORN) {
+    return 0x0000ff;
+  } else {
+    return 0xffff00;
+  }
+}
+
+int getSize(Keratinocyte k) {
+  return 4;
+}
+
+bool on_substrate_surface(float z) {
+  return z < BASEMENT_MAX_Z;
+}
+
+float get_ta_to_comm_diff_minor_axis(float calcium_level) {
+  return K_WIDTH * 1.5;
+}
+
+float get_ta_to_comm_diff_major_axis(float calcium_level) {
+  return K_WIDTH * 5;
+}
+
+int get_max_num_bonds(float calcium_level) {
+  return 6;
+}
+
+bool can_stratify(int cell_type, float calcium_level) {
+  return cell_type != K_TYPE_HACAT;
+}
+
+int get_max_stem_colony_size(float calcium_level) {
+  return 20;
+}
+
+float get_new_motility(int cell_type, float calcium_level) {
+  if (cell_type == K_TYPE_TA) {
+    return 0.5;
+  } else {
+    return 0;
+  }
+}
+
+bool divide(int type, int cycle) {
+  return (type == K_TYPE_STEM || type == K_TYPE_TA || type == K_TYPE_HACAT)
+      && cycle > CYCLE_LENGTH[type];
+}
+
+float get_new_coord(float old_coord, bool pos_only) {
+  float coord = 0;
+  while (coord == 0) {
+    coord = random(0, K_WIDTH / 10);
+  }
+
+  if (!pos_only && coord > 0.5) {
+    coord = -coord;
+  }
+
+  return old_coord + coord;
+}
+
+int start_new_cycle_position(int type) {
+  float cycle_fraction = CYCLE_LENGTH[type] / 4;
+  float pos = random(0, cycle_fraction);
+  return int(round(pos));
+}
+
+float ellipse_radius(float major_radius, float minor_radius, float theta) {
+  float a_squ = major_radius * major_radius;
+  float b_squ = minor_radius * minor_radius;
+  float sin_theta = sin(theta);
+  float sin_theta_squ = sin_theta * sin_theta;
+  float cos_theta = cos(theta);
+  float cos_theta_squ = cos_theta * cos_theta;
+  float r_squ = (a_squ * b_squ) / (a_squ * sin_theta_squ  + b_squ * cos_theta_squ);
+  float r = sqrt(r_squ);
+  return r;
+}
+
+bool check_distance(
+  float nearest_dist, float nearest_xy, float nearest_z,
+  float major_radius, float minor_radius, float thres
+) {
+  if (nearest_dist == -1) {
+    return true;
+  }
+
+  float theta = tan(nearest_z / nearest_xy);
+  float er = ellipse_radius(major_radius, minor_radius, theta);
+  return thres * er < nearest_dist;
+}
+
+bool on_colony_edge(int num_bonds) {
+  return num_bonds <= 2;
+}
+
+step cycle(Keratinocyte in -> out) {
+  int contacts = in.num_xy_bonds + in.num_z_bonds;
+
+  // Touching a wall counts as two contacts
+  if (in.pos.x == 0 || in.pos.x == SURFACE_WIDTH) {
+    contacts += 2;
+  }
+  if (in.pos.y == 0 || in.pos.y == SURFACE_WIDTH) {
+    contacts += 2;
+  }
+
+  if (contacts <= get_max_num_bonds(calcium_level)) {
+    // cell comes out of G0
+    out.cycle = in.cycle + 1;
+    out.contact_inhibited_ticks = 0;
+  } else {
+    // cell enters G0
+    out.contact_inhibited_ticks = in.contact_inhibited_ticks + 1;
+  }
+
+  if (divide(in.type, in.cycle)) {
+    int new_cycle = start_new_cycle_position(in.type);
+    float3 new_pos = float3(
+      get_new_coord(in.pos.x, false),
+      get_new_coord(in.pos.y, false),
+      in.pos.z 
+    );
+    float new_diff_noise_factor = random(0.9, 1.1);
+    float new_dir = random(2 * PI);
+    float new_motility = random(0.5, 1.0) * get_new_motility(in.type, calcium_level);
+
+    if (can_stratify(in.type, calcium_level) && in.num_xy_bonds >= MAX_NUM_LATERAL_BONDS) {
+      new_pos.z = get_new_coord(in.pos.z, true);
+    }
+    
+    out.cycle = start_new_cycle_position(in.type);
+    add(Keratinocyte {
+      type: in.type,
+      pos: new_pos, // XXX not supported
+      //pos: in.pos,
+      force: float3(0),
+      num_xy_bonds: 0,
+      num_z_bonds: 0,
+      num_stem_bonds: 0,
+      cycle: new_cycle,
+      diff_noise_factor: new_diff_noise_factor,
+      dead_ticks: 0,
+      contact_inhibited_ticks: 0,
+      motility: new_motility,
+      dir: new_dir,
+      movement: 0,
+    });
+  }
+}
+
+step differentiate(Keratinocyte in -> out) {
+  float nearest_dist = -1;
+  float nearest_xy = -1;
+  float nearest_z = -1;
+  int num_stem_neighbors = 0;
+
+  float radius = 125; // Specified location partitioning radius
+  for (Keratinocyte other : near(in, radius)) {
+    if (in.type == K_TYPE_STEM) {
+      if (on_colony_edge(in.num_stem_bonds) && other.type == K_TYPE_STEM) {
+        float dist = dist(in.pos, other.pos);
+        float max_dist = K_WIDTH * get_max_stem_colony_size(calcium_level) / 2;
+        if (dist < max_dist) {
+          num_stem_neighbors += 1;
+        }
+      }
+    } else if (in.type == K_TYPE_TA) {
+      /* If the TA cell is too far from the stem cell centre,
+       * it differentiates into in a committed cell. */
+      if (other.type == K_TYPE_STEM) {
+        float dist = dist(in.pos, other.pos);
+        if (nearest_dist == -1 || dist < nearest_dist) {
+          nearest_dist = dist;
+          nearest_xy = dist(float2(in.pos.x, in.pos.y), float2(other.pos.x, other.pos.y));
+          nearest_z = in.pos.z < other.pos.z ? other.pos.z - in.pos.z : in.pos.z - other.pos.z;
+        }
+      }
+    }
+  }
+
+  if (in.type == K_TYPE_STEM) {
+		/* For stem cells, we check if the colony is too big and if they are on the edge.*/
+    /* If so, they differentiate into TA cells.	*/
+    if (on_colony_edge(in.num_stem_bonds)) {
+      if (num_stem_neighbors > get_max_stem_colony_size(calcium_level)) {
+        out.type = K_TYPE_TA;
+      }
+    }
+
+    /* If the cell stratifies, it also differentiates into a TA cell*/
+    if (!on_substrate_surface(in.pos.z)) {
+      out.type = K_TYPE_TA;
+    }
+  } else if (in.type == K_TYPE_TA) {
+    bool do_diff = check_distance(
+      nearest_dist, nearest_xy, nearest_z,
+      get_ta_to_comm_diff_major_axis(calcium_level),
+      get_ta_to_comm_diff_minor_axis(calcium_level),
+      in.diff_noise_factor
+    );
+
+    if (do_diff) {
+      out.type = K_TYPE_COMM;
+    } else if (in.contact_inhibited_ticks >= MAX_TO_G0_CONTACT_INHIBITED_TICKS) {
+      out.type = K_TYPE_COMM;
+    }
+  } else if (in.type == K_TYPE_COMM) {
+    /* after a period as a committed cell, it dies for good - differentiation into a corneocyte*/
+    out.dead_ticks = in.dead_ticks + 1;
+    if (in.dead_ticks+1 > MAX_DEAD_TICKS) {
+      out.type = K_TYPE_CORN;
+    }
+  } else if (in.type == K_TYPE_HACAT) {
+    if (in.contact_inhibited_ticks >= MAX_TO_G0_CONTACT_INHIBITED_TICKS) {
+      out.type = K_TYPE_COMM;
+    }
+  }
+}
+
+step death_signal(Keratinocyte in -> out) {
+  int num_corn_neighbors = 0;
+
+  if (in.type == K_TYPE_CORN) {
+    return;
+  }
+
+  for (Keratinocyte other : near(in, K_WIDTH + FORCE_IRADIUS)) {
+    if (other.type == K_TYPE_CORN) {
+      num_corn_neighbors += 1;
+    }
+  }
+
+  float prob = num_corn_neighbors * num_corn_neighbors * 0.01;
+  if (random(1.0) < prob) {
+    /* jump through another hoop */
+    if (random(1.0) < 0.01) {
+      out.type = K_TYPE_CORN;
+    }
+  }
+}
+
+step migrate(Keratinocyte in -> out) {
+  float x1 = in.pos.x;
+  float y1 = in.pos.y;
+  float dir1 = in.dir;
+
+  if (random(1.0) < 0.1) {
+    /* if rnd less than 0.1, then changed direction within +/- 45 degrees */
+    dir1 += random(PI / 4.0); // XXX This only allows positive changes, seems wrong
+  }
+  x1 += in.motility * cos(dir1);
+  y1 += in.motility * sin(dir1);
+
+  for (Keratinocyte other : near(in, K_WIDTH)) {
+    // XXX skip whole loop?
+    if (in.type != K_TYPE_TA && in.type != K_TYPE_HACAT) {
+      continue;
+    }
+
+    if (on_substrate_surface(other.pos.z) && other.motility == 0) {
+      dir1 -= PI;
+      if (dir1 > 2 * PI) {
+        dir1 -= 2 * PI;
+      }
+
+      // XXX This overwrites x1,y1 completely, is that intentional?
+      // check if we're on the base of the dish and other cell is stationary
+      x1 = in.pos.x + in.motility * cos(dir1);
+      y1 = in.pos.y + in.motility * sin(dir1);
+    }
+  }
+
+  if (x1 > SURFACE_WIDTH) {
+    x1 = SURFACE_WIDTH - in.motility * random(1.0);
+    dir1 = PI + PI * random(-0.5, 0.5)/4.0;
+  }
+  if (x1 < 0) {
+    x1 = in.motility * random(1.0);
+    dir1 = PI * random(-0.5, 0.5)/4.0;
+  }
+
+  if (y1 > SURFACE_WIDTH) {
+    y1 = SURFACE_WIDTH - in.motility * random(1.0);
+    dir1 = 3*PI/2 + PI * random(-0.5, 0.5)/4.0;
+  }
+  if (y1 < 0) {
+    y1 = in.motility * random(1.0);
+    dir1 = PI/2 * random(-0.5, 0.5)/4.0;
+  }
+
+  out.pos.x = x1;
+  out.pos.y = y1;
+  out.dir = dir1;
+}
+
+// The original FlameGPU model works by resolving forces iteratively
+// multiple times, until all cells move a minimum amount or exceed an
+// iteration limit. We only do one iteration here.
+step resolve_forces(Keratinocyte in -> out) {
+  float3 new_force = in.force;
+  int num_xy_bonds = 0;
+  int num_z_bonds = 0;
+  int num_stem_bonds = 0;
+
+  for (Keratinocyte other : near(in, K_WIDTH + FORCE_IRADIUS)) {
+    float distance = dist(in.pos, other.pos);
+    if (distance == 0.) continue;
+
+    float separation_distance = distance - K_WIDTH;
+    if (other.pos.z >= in.pos.z) {
+      if (other.pos.z - in.pos.z > K_WIDTH/2) {
+        num_z_bonds += 1;
+      } else {
+        num_xy_bonds += 1;
+      }
+    }
+
+    if (other.type == K_TYPE_STEM) {
+      num_stem_bonds += 1;
+    }
+
+    float force = separation_distance > 0
+      ? FORCE_MATRIX[in.type + 5*other.type]
+      : FORCE_REP;
+
+    if (on_substrate_surface(in.pos.z)) {
+      force *= DOWNWARD_FORCE[in.type];
+    }
+    force *= FORCE_DAMPENER;
+
+    new_force += force * (other.pos - in.pos) * separation_distance / distance;
+  }
+
+  if (in.pos.z <= K_WIDTH * 1.5) {
+    new_force.z -= SUBSTRATE_FORCE[in.type];
+  }
+
+  out.num_xy_bonds = num_xy_bonds;
+  out.num_z_bonds = num_z_bonds;
+  out.num_stem_bonds = num_stem_bonds;
+
+  // XXX Clarify whether writing to out.pos and then reading/adjust it is fine
+  float3 new_pos = in.pos + new_force;
+
+  // XXX Bounding should be doable more nicely
+  if (new_pos.x < 0) {
+    new_pos.x = 0;
+  }
+  if (new_pos.y < 0) {
+    new_pos.y = 0;
+  }
+  if (new_pos.z < 0) {
+    new_pos.z = 0;
+  }
+  if (new_pos.x > SURFACE_WIDTH) {
+    new_pos.x = SURFACE_WIDTH;
+  }
+  if (new_pos.y > SURFACE_WIDTH) {
+    new_pos.y = SURFACE_WIDTH;
+  }
+
+  out.movement = length(new_pos - in.pos);
+  out.pos = new_pos;
+}
+
+sequential step gather_stats() {
+  int num_stem = count(Keratinocyte.type, K_TYPE_STEM);
+  int num_ta = count(Keratinocyte.type, K_TYPE_TA);
+  int num_comm = count(Keratinocyte.type, K_TYPE_COMM);
+  int num_corn = count(Keratinocyte.type, K_TYPE_CORN);
+  int num_hacat = count(Keratinocyte.type, K_TYPE_HACAT);
+  float exec_time = getLastExecTime();
+  log_csv(num_stem, num_ta, num_comm, num_corn, num_hacat, exec_time);
+}
+
+void main() {
+  for (int i : 0..num_agents) {
+    // XXX What is the correct initialization?
+    add(Keratinocyte {
+      type: K_TYPE_STEM,
+      pos: random(float3(SURFACE_WIDTH, SURFACE_WIDTH, 50)),
+      force: float3(0),
+      num_xy_bonds: 0,
+      num_z_bonds: 0,
+      num_stem_bonds: 0,
+      cycle: start_new_cycle_position(K_TYPE_STEM),
+      diff_noise_factor: random(0.9, 1.1),
+      dead_ticks: 0,
+      contact_inhibited_ticks: 0,
+      motility: random(0, 0.5),
+      dir: 0,
+      movement: 0,
+    });
+  }
+
+  simulate(num_timesteps) {
+    cycle, differentiate, death_signal, migrate, resolve_forces,
+    gather_stats
+  }
+}
