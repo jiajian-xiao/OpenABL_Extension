@@ -283,7 +283,7 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
         << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << nl;
 
     *this << "int envId = " << agentExpr << "->envId + "<<pLabel<<" + "<<qLabel<<" + "<<rLabel<<";" << nl;
-    *this << "if ( envId > 0 && envId < " << max_par_size << ")" <<nl;
+    *this << "if ( envId >= 0 && envId < " << max_par_size << ")" <<nl;
 
     *this << "if ("<< envName << "[envId].mem_start !=" << envName << "[envId].mem_end)" << nl;
     *this << "for (size_t " << iLabel << " = "
@@ -305,10 +305,10 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
       const AST::Expression &agentExpr = stmt.getOnEnv();
 
 
-      AST::AgentDeclaration *agentDecl = stmt.type->resolved.getAgentDecl();
-      AST::AgentMember *posMember = agentDecl->getPositionMember();
-      const char *dist_fn = posMember->type->resolved == Type::VEC2
-                            ? "dist_flo2" : "dist_flo3";
+//      AST::AgentDeclaration *agentDecl = stmt.type->resolved.getAgentDecl();
+//      AST::AgentMember *posMember = agentDecl->getPositionMember();
+//      const char *dist_fn = posMember->type->resolved == Type::VEC2
+//                            ? "dist_flo2" : "dist_flo3";
 
       std::string eLabel = makeAnonLabel();
       std::string iLabel = makeAnonLabel();
@@ -500,23 +500,7 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
                 }
             }
         }
-        if (!generateForGraph) {
-            if (envMin.isVec2())
-                *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".y - "
-                      << envMin.getVec2().y << ")/" << maxRadius
-                      << ") * " << "((int)(" << envSize.getVec2().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                      << "." << posMember->name << ".x - " <<
-                      envMin.getVec2().x << ")/" << maxRadius << ");" << nl;
-            else if (envMin.isVec3())
-                *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".z - "
-                      << envMin.getVec3().z << ")/" << maxRadius
-                      << ") * " << "((int)(" << envSize.getVec3().z << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                      << "." << posMember->name << ".y - " <<
-                      envMin.getVec3().y << ")/" << maxRadius
-                      << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                      << "." << posMember->name << ".x - " <<
-                      envMin.getVec3().x << ")/" << maxRadius << ");" << nl;
-        }
+
         *this << "buff[" << idLabel << "] = " << dbufLabel << ";" << nl
               << "dbuff[" << idLabel << "] = " << bufLabel << ";" << nl;
 
@@ -557,8 +541,26 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << " *dbuff, __global int *len, __global " << envType << " *" << envName << ") {"
               << indent << nl
               << "int i = get_global_id(0);" << nl
-              << "if (i>*len-1) return;" << nl
-              << "int x = buff[i].envId;" << nl
+              << "if (i>*len-1) return;" << nl;
+
+        std::string dbufLabel = "buff[i]";
+        if (envMin.isVec2())
+            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".y - "
+                  << envMin.getVec2().y << ")/" << maxRadius
+                  << ") * " << "((int)(" << envSize.getVec2().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "." << posMember->name << ".x - " <<
+                  envMin.getVec2().x << ")/" << maxRadius << ");" << nl;
+        else if (envMin.isVec3())
+            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".z - "
+                  << envMin.getVec3().z << ")/" << maxRadius
+                  << ") * " << "((int)(" << envSize.getVec3().z << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "." << posMember->name << ".y - " <<
+                  envMin.getVec3().y << ")/" << maxRadius
+                  << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "." << posMember->name << ".x - " <<
+                  envMin.getVec3().x << ")/" << maxRadius << ");" << nl;
+
+        *this << "int x = buff[i].envId;" << nl
               << nl
               << "if (i == 0) {" << indent << nl
               << envName << "[x].mem_start = 0;"
