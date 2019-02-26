@@ -42,9 +42,15 @@ sudo apt-get install git autoconf libtool libxml2-utils xsltproc \
 ```
 
 FlameGPU additionally requires a CUDA installation.
+OpenCL backend requires an OpenCL installation.
+
+More information about OpenCL drivers from different vendors can be found:
+Intel: https://software.intel.com/en-us/articles/opencl-drivers
+NVIDIA: https://developer.nvidia.com/opencl
+AMD: https://www.amd.com/en/support/kb/release-notes/rn-prorad-lin-18-20
 
 The backends can then be downloaded and built using the following command:
-
+``
 ```sh
 # To build all
 make -C deps
@@ -55,7 +61,6 @@ make -C deps flame
 make -C deps flamegpu
 make -C deps dmason
 ```
-OpenCL needs to be installed separately.
 
 ## Running
 
