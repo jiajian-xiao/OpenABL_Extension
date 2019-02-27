@@ -33,8 +33,8 @@ param float alive_fraction = 0.1;
 
 // Number of agents is only a hint,
 // we'll pick a square field size based on it
-param int num_agents = 100*100;
-param int num_timesteps = 1000;
+param int num_agents = 512*512;
+param int num_timesteps = 100;
 
 int size = int(sqrt(num_agents));
 

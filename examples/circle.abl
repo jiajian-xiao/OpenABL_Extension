@@ -19,7 +19,7 @@ agent Point {
 // Number of timesteps
 param int num_timesteps = 100;
 // Number of agents
-param int num_agents = 1000;
+param int num_agents = 262144;
 
 // Density of agents
 param float rho = 0.05;
@@ -66,6 +66,5 @@ void main() {
 
   // simulation (parallel)
   simulate(num_timesteps) { move_point }
-
   save("points.json");
 }
