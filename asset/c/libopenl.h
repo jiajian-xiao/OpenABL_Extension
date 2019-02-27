@@ -102,6 +102,18 @@ ulong xorshift128plus() {
     return xorshift_state[1] + y;
 }
 
+// http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
+abl_float MWC64X(__global uint2 *state)
+{
+enum { A=4294883355U};
+uint x=(*state).x, c=(*state).y;  // Unpack the state
+uint res=x^c;                     // Calculate the result
+uint hi=mul_hi(x,A);              // Step the RNG
+x=x*A+c;
+c=hi+(x<c);
+*state=(uint2)(x,c);              // Pack the state back up
+return (abl_float)res / UINT_MAX;     // Return the next result
+}
 abl_float random_float(abl_float min, abl_float max) {
     ulong x = xorshift128plus();
     // This is a horrible way of generating a random float.
@@ -124,14 +136,3 @@ int random_int(int min, int max) {
     return min + x % n;
 }
 
-abl_float MWC64X(uint2 *state)
-{
-    enum { A=4294883355U};
-    uint x=(*state).x, c=(*state).y;  // Unpack the state
-    uint res=x^c;                     // Calculate the result
-    uint hi=mul_hi(x,A);              // Step the RNG
-    x=x*A+c;
-    c=hi+(x<c);
-    *state=(uint2)(x,c);              // Pack the state back up
-    return (abl_float)res / UINT_MAX;     // Return the next result
-}

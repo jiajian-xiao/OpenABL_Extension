@@ -1,9 +1,10 @@
 This is an extension to the OpenABL framework forked from https://github.com/OpenABL
 with the support of 
-- generating OpenCL codes for heterogeneous hardware
-- graph-based simulation such as traffic simulation
-- Conflict resolution for parallel programming
+- Generating OpenCL codes for heterogeneous hardware
+- Graph-based simulation such as traffic simulation (currently only supported by the OpenCL backend)
+- Conflict resolution for parallel programming (currently only supported by the OpenCL backend)
 
+The following introduction and usage instructions are from the OpenABL Github page with minor modification.
 # OpenABL
 
 OpenABL is a work-in-progress domain-specific language for agent based simulations. It it designed to compile to multiple backends targeting different computing architectures, including single CPUs,
@@ -44,12 +45,12 @@ sudo apt-get install git autoconf libtool libxml2-utils xsltproc \
 FlameGPU additionally requires a CUDA installation.
 OpenCL backend requires an OpenCL installation.
 
-More information about OpenCL drivers from different vendors can be found:
-Intel: https://software.intel.com/en-us/articles/opencl-drivers
-NVIDIA: https://developer.nvidia.com/opencl
-AMD: https://www.amd.com/en/support/kb/release-notes/rn-prorad-lin-18-20
+More information about OpenCL drivers from different vendors can be found:\
+Intel: https://software.intel.com/en-us/articles/opencl-drivers \
+NVIDIA: https://developer.nvidia.com/opencl \
+AMD: https://www.amd.com/en/support/kb/release-notes/rn-prorad-lin-18-20 \
 
-The backends can then be downloaded and built using the following command:
+The other backends can then be downloaded and built using the following command:
 ``
 ```sh
 # To build all
@@ -66,10 +67,10 @@ make -C deps dmason
 
 Examples are located in the `examples` directory.
 
-To compile the `examples/circle.abl` example using the Mason backend:
+To compile the `examples/circle.abl` example using the OpenCL backend:
 
 ```sh
-build/OpenABL -i examples/circle.abl -o ./output -b mason
+build/OpenABL -i examples/circle.abl -o ./output -b cl
 ```
 
 The result will be written into the `./output` directory. To run the generated code:

@@ -101,6 +101,8 @@ ulong xorshift128plus() {
     xorshift_state[1] = x ^ y ^ (x >> 17) ^ (y >> 26); // b, c
     return xorshift_state[1] + y;
 }
+
+// http://cas.ee.ic.ac.uk/people/dt10/research/rngs-gpu-mwc64x.html
 abl_float MWC64X(__global uint2 *state)
 {
     enum { A=4294883355U};
