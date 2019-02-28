@@ -83,23 +83,19 @@ cd ./output
 
 For the `circle.abl` example, this will create a `points.json` file.
 
-You can also automatically build and run the generated code (if this is supported by the backend):
+To enable the conflict resolution with `examples/traffic.abl` example using the OpenCL backend:
 
 ```sh
-# Generate + Build
-build/OpenABL -i examples/circle.abl -o ./output -b mason -B
-# Generate + Build + Run
-build/OpenABL -i examples/circle.abl -o ./output -b mason -R
+build/OpenABL -c -i examples/traffic.abl -o ./output_conflict -b cl
 ```
 
-If the backend supports it, it is also possible to run with visualization:
+The result will be written into the `./output_conflict` directory. To run the generated code again:
 
 ```sh
-build/OpenABL -i examples/circle.abl -b mason -C visualize=true -R
+cd ./output
+./build.sh
+./run.sh
 ```
-
-If `-R` is used, the output directory can be omitted. In this case a temporary directory will be
-used.
 
 ## Environment configuration
 
