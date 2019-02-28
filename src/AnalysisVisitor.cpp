@@ -1530,6 +1530,11 @@ void AnalysisVisitor::leave(AST::Script &script) {
     envDecl->envGranularity = autoRadius;
   }
 
+  if (isConflictResolutionEnable && !script.conrStmt) {
+    err << "Conflict resolution enabled without a conflict resolution function" << AST::Location{};
+    return;
+  }
+
   if (!script.mainFunc) {
     err << "Script must have a main function" << AST::Location{};
     return;

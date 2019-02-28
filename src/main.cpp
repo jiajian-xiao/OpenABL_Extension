@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
   FunctionList funcs;
   registerBuiltinFunctions(funcs);
 
-  AnalysisVisitor visitor(mainScript, options.params, err, funcs, options.backend);
+  AnalysisVisitor visitor(mainScript, options.params, err, funcs, options.backend, options.conflict);
   visitor.handleLibScript(libScript);
   visitor.handleMainScript(mainScript);
 

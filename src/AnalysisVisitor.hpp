@@ -25,9 +25,9 @@ namespace OpenABL {
 struct AnalysisVisitor : public AST::Visitor {
   AnalysisVisitor(
       AST::Script &script, const std::map<std::string, std::string> &params,
-      ErrorStream &err, FunctionList &builtins, const std::string &backend
+      ErrorStream &err, FunctionList &builtins, const std::string &backend, const bool isConflictResolutionEnabled
   ) : script(script), params(params), funcs(builtins), err(err),
-      scope(script.scope), backend(backend) {}
+      scope(script.scope), backend(backend), isConflictResolutionEnable(isConflictResolutionEnabled) {}
 
   void enter(AST::Var &);
   void enter(AST::Literal &);
@@ -136,6 +136,8 @@ private:
 
   // Whether the current script is a library or main script
   bool isLib;
+
+  bool isConflictResolutionEnable;
   // Currently *visible* variables
   VarMap varMap;
   // Stack of previous visible variable scopes
