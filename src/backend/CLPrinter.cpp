@@ -537,9 +537,17 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << "}"
               << outdent << nl
               << "}" << nl;
+
         *this << "__kernel void mem_update(__global " << type << " *buff, __global " << type
-              << " *dbuff, __global int *len, __global " << envType << " *" << envName << ") {"
-              << indent << nl
+              << " *dbuff, __global int *len, __global " << envType << " *" << envName;
+
+        if (isConflictResolutionEnabled) {
+            *this <<", __global bool *isConflicted) {";
+        } else {
+            *this <<") {";
+        }
+
+        *this << indent << nl
               << "int i = get_global_id(0);" << nl
               << "if (i>*len-1) return;" << nl;
 
@@ -576,8 +584,12 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << outdent << nl
               << "}" << nl
               << outdent << nl
-              << "}" << nl
-              << outdent << nl
+              << "}" << nl;
+
+        if (isConflictResolutionEnabled)
+            *this << "*isConflicted = false;" << nl;
+
+        *this << outdent << nl
               << "}" << nl;
     } else {
         *this << "__kernel void sorting(__global " << type << " *buff, __global " << type
