@@ -272,18 +272,18 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
     if (envSize.isVec2())
         *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec2().y << "/" << maxRadius
         << ")+1); " << qLabel << " < ((int)(" << envSize.getVec2().y << "/" << maxRadius
-        << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().y << "/" << maxRadius << "+1))) {" << nl
-        << "int " <<rLabel<<" = 0;" << nl;
+        << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().y << "/" << maxRadius << "+1))) {" << indent << nl
+        << "int " << rLabel << " = 0;" << nl;
     else if (envSize.isVec3())
         *this << "for (int " << rLabel << " = - ((int)(" << envSize.getVec3().z << "/" << maxRadius
         << ")+1); " << rLabel << " < ((int)(" << envSize.getVec3().z << "/" << maxRadius
         << ")+1)+1 ; "<< rLabel << " =  " << rLabel <<" + ((int)(" << envSize.getVec3().z << "/" << maxRadius << "+1)))" << nl
         << "for (int "<< qLabel << " = - ((int)(" << envSize.getVec3().y << "/" << maxRadius
         << ")+1); " << qLabel << " < ((int)(" << envSize.getVec3().y << "/" << maxRadius
-        << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << nl;
+        << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << indent << nl;
 
     *this << "int envId = " << agentExpr << "->envId + "<<pLabel<<" + "<<qLabel<<" + "<<rLabel<<";" << nl;
-    *this << "if ( envId >= 0 && envId < " << max_par_size << ")" <<nl;
+    *this << "if ( envId >= 0 && envId < " << max_par_size << " )" <<nl;
 
     *this << "if ("<< envName << "[envId].mem_start !=" << envName << "[envId].mem_end)" << nl;
     *this << "for (size_t " << iLabel << " = "
@@ -298,7 +298,7 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
           << agentExpr << "->" << posMember->name << ") > " << radiusExpr
           << ") continue;" << nl
           << *stmt.stmt << outdent << nl << "}";
-    *this << nl <<"}" << nl;
+    *this << outdent << nl <<"}" << nl;
     return;
   } else if (stmt.isOn()) {
       //interpret Near
@@ -363,8 +363,7 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
         }
 
 
-        *this
-                << "__kernel void conflict_resolver(__global " << type << " *buff, __global " << type
+        *this   << "__kernel void conflict_resolver(__global " << type << " *buff, __global " << type
                 << " *dbuff, __global int *len, __global " << envType << " *" << envName
                 << ", __global bool *isConflicted) {"
                 << indent << nl
@@ -388,7 +387,7 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << outdent << nl << "}"
                 << outdent << nl << "}";
     } else {
-          int max_par_size;
+        int max_par_size;
         if (envSize.isVec2()) {
             max_par_size = ((int)(envSize.getVec2().x/maxRadius)+1)*((int)(envSize.getVec2().y/maxRadius)+1);
         } else if (envSize.isVec3()) {
@@ -404,25 +403,26 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << " *dbuff, __global int *len, __global " << envType << " *" << envName
                 << ", __global bool *isConflicted) {"
                 << indent << nl;
-        *this   << "for (int " << iLabel << " = 0; " << iLabel << " < *len; " << iLabel << "++) {" << indent << nl
-                << type << " " << ag1Label << " = buff[" << iLabel << "];" << nl;
+        *this   << "int i = get_global_id(0);" << nl
+                << "if (i > *len) return;" << nl
+                << type << " " << ag1Label << "  = buff[i];" << nl;
 
         *this << "for (int " << pLabel << " = -1; " << pLabel << " < 2; " << pLabel << "++)" << nl;
         if (envSize.isVec2())
             *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec2().y << "/" << maxRadius
                   << ")+1); " << qLabel << " < ((int)(" << envSize.getVec2().y << "/" << maxRadius
-                  << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().y << "/" << maxRadius << "+1))) {" << nl
-                  << "int " <<rLabel<<" = 0;" << nl;
+                  << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().y << "/" << maxRadius << "+1))) {" << indent << nl
+                  << "int " << rLabel <<" = 0;" << nl;
         else if (envSize.isVec3())
             *this << "for (int " << rLabel << " = - ((int)(" << envSize.getVec3().z << "/" << maxRadius
                   << ")+1); " << rLabel << " < ((int)(" << envSize.getVec3().z << "/" << maxRadius
                   << ")+1)+1 ; "<< rLabel << " =  " << rLabel <<" + ((int)(" << envSize.getVec3().z << "/" << maxRadius << "+1)))" << nl
                   << "for (int "<< qLabel << " = - ((int)(" << envSize.getVec3().y << "/" << maxRadius
                   << ")+1); " << qLabel << " < ((int)(" << envSize.getVec3().y << "/" << maxRadius
-                  << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << nl;
+                  << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << indent<< nl;
 
         *this   << "int envId = " << ag1Label << ".envId + "<<pLabel<<" + "<<qLabel<<" + "<<rLabel<<";" << nl
-                << "if ( envId > 0 && envId < " << max_par_size << ")" <<nl
+                << "if ( envId > 0 && envId < " << max_par_size << " )" <<nl
                 << "if (" << envName << "[envId].mem_start != "<< envName << "[envId].mem_end)"<<nl
                 << "for (size_t " << jLabel << " = "
                 << envName << "[envId].mem_start;"
@@ -431,16 +431,16 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << indent << nl
 
                 << type << " " << ag2Label << " = buff[" << jLabel << "];" << nl
-                << "if (" << iLabel << "!=" << jLabel << ") {" << indent << nl
+                << "if (i !=" << jLabel << ") {" << indent << nl
                 << "if (" << stmt.tiebreakingFuncDecl->name << "(&" << ag1Label << ", &" << ag2Label << ")) {" << indent
                 << nl
-                << "buff[" << iLabel << "] = " << "dbuff[" << iLabel << "];" << nl
-                << "*isConflicted = true;" << nl
+                << "buff[i] = " << "dbuff[i];" << nl
+                << "*isConflicted = true;"
                 << outdent << nl << "}"
                 << outdent << nl << "}"
                 << outdent << nl << "}"
-                << nl << "}"
                 << outdent << nl << "}"
+//                << outdent << nl << "}"
                 << outdent << nl << "}";
     }
 }
@@ -502,7 +502,7 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
         }
 
         *this << "buff[" << idLabel << "] = " << dbufLabel << ";" << nl
-              << "dbuff[" << idLabel << "] = " << bufLabel << ";" << nl;
+              << "dbuff[" << idLabel << "] = " << bufLabel << ";";
 
         *this << outdent << nl << "}" << nl;
     }
@@ -582,7 +582,7 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << "if (i==*len-1) {" << indent << nl
               << envName << "[x].mem_end = *len-1;"
               << outdent << nl
-              << "}" << nl
+              << "}"
               << outdent << nl
               << "}" << nl;
 
@@ -640,7 +640,7 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << "if (i==*len-1) {" << indent << nl
               << envName << "[x].mem_end = *len-1;"
               << outdent << nl
-              << "}" << nl
+              << "}"
               << outdent << nl
               << "}" << nl;
 
@@ -678,7 +678,7 @@ void CLPrinter::print(const AST::AgentDeclaration &decl) {
 
   if (decl.isRealAgent) {
     if (!generateForGraph)
-        *this << "int envId;" << nl;
+        *this << indent << nl << "int envId;" << outdent << nl;
     *this << "}" << decl.name << ";" << nl;
   }
   else {

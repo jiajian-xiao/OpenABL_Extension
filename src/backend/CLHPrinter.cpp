@@ -426,7 +426,7 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
         if (generateForGraph)
             *this << "size_t cr_globalWorkSize = " << envGraphSize << ";" << nl;
         else
-            *this << "size_t cr_globalWorkSize = " << 1 << ";" << nl;
+            *this << "size_t cr_globalWorkSize = globalWorkSize ;" << nl;
     }
 
     *this << "for (int length = 1; length < globalWorkSize; length <<= 1)" << nl
@@ -562,7 +562,7 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
         }
     }
     *this
-    << outdent << nl<< "}" << nl;
+    << outdent << nl << "}" << nl;
 
     *this << type << " " << outTmpLabel << " = calloc(sizeof("<< type <<"), "<< bufName << ".len);" << nl
     << "ret = clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjs[0], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << ", 0, NULL, NULL);"<<nl
@@ -599,7 +599,7 @@ void CLHPrinter::print(const AST::AgentDeclaration &decl) {
 
   if (decl.isRealAgent) {
       if (!generateForGraph)
-          *this << "int envId;" << nl;
+          *this << indent << nl << "int envId;" << outdent << nl;
       *this << "}" << decl.name << ";" << nl;
   }
   else {
