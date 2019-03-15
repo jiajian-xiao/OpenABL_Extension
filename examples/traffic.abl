@@ -204,6 +204,7 @@ step lane_change(Point in -> out) {
     if (dis_rear_left > -(size) || dis_front_left < size)
         p_left = 0;
 
+    //we use a better RNG
     float rnd1 = MWC64X(1.0);
     float rnd2 = MWC64X(1.0);
 
@@ -229,7 +230,7 @@ bool tie_breaking(Point ag1, Point ag2){
         return false;
 }
 void main() {
-  // initialization (sequential)
+  // initialisation
     int lan = 1;
     int posit = 4;
     for (int i : 0..num_agents) {
@@ -275,7 +276,7 @@ void main() {
         }
     }
 
-    // simulation (parallel)
+    // simulation with conflict resolution
     simulate(num_timesteps) { car_follow, lane_change }
     conflictresolver {roads, NULL, tie_breaking}
 }

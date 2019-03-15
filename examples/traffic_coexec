@@ -229,7 +229,7 @@ bool tie_breaking(Point ag1, Point ag2){
         return false;
 }
 void main() {
-  // initialization (sequential)
+  // initialisation
     int lan = 1;
     int posit = 4;
     for (int i : 0..num_agents) {
@@ -275,7 +275,8 @@ void main() {
         }
     }
 
-    // simulation (parallel)
+    // This is an example showing CPU-GPU co-execution. The car following model runs on OpenCL device 1 while lane changing model
+    // on device id 0. Currently, we support co-execution of two devices.
     simulate(num_timesteps) { car_follow(1), lane_change(0) }
     conflictresolver {roads, NULL, tie_breaking}
 }
