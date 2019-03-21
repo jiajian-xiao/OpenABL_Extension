@@ -431,7 +431,7 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << indent << nl
 
                 << type << " " << ag2Label << " = buff[" << jLabel << "];" << nl
-                << "if (i !=" << jLabel << ") {" << indent << nl
+                << "if (i <" << jLabel << ") {" << indent << nl
                 << "if (" << stmt.tiebreakingFuncDecl->name << "(&" << ag1Label << ", &" << ag2Label << ")) {" << indent
                 << nl
                 << "buff[i] = " << "dbuff[i];" << nl
