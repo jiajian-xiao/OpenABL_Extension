@@ -231,12 +231,15 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
     << "cl_mem "<< agentLabel <<"MemObjLens[" << num_devices << "];" << nl
     << "cl_mem "<< agentLabel <<"MemObjEnvs[" << num_devices << "];" << nl;
 
-    if (script.usesRng){
+    if (useRNG){
         *this << "cl_mem "<< agentLabel <<"MemObjRngs[" << num_devices << "];" << nl;
     }
     if (isConflictResolutionEnabled) {
         *this << "cl_mem " << agentLabel << "MemObjConflictFlags[" << num_devices << "];" << nl
         << "cl_kernel cr_kernels[" << num_devices << "];" << nl;
+        if (!generateForGraph) {
+            *this << "cl_kernel cra_kernels[" << num_devices << "];" << nl;
+        }
     }
 
     std::string deviceIter = "deviceIter";
@@ -282,9 +285,14 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                   << "MemObjConflictFlag  = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(bool), NULL , &ret);"
                   << nl
                   << agentLabel <<"MemObjConflictFlags[" << deviceIter << "] = " << agentLabel << "MemObjConflictFlag;" << nl;
+            if (!generateForGraph) {
+                *this << "cl_mem " << agentLabel
+                      << "MemObjConflictSet  = clCreateBuffer(context, CL_MEM_READ_WRITE, sizeof(" << type << "_conflict)*" << bufName << ".len, NULL , &ret);"
+                      << nl;
+            }
         }
 
-        if (script.usesRng) {
+        if (useRNG) {
             std::string iterLabel = makeAnonLabel();
             std::string varLabel = makeAnonLabel();
 
@@ -298,7 +306,7 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                   << agentLabel <<"MemObjRngs[" << deviceIter << "] = " << agentLabel << "MemObjRng;";
         }
 
-        *this << "char fileName[] = \"kernel.cl\";" << nl
+        *this << nl << "char fileName[] = \"kernel.cl\";" << nl
               << "char *source_str;" << nl
               << "size_t source_size;" << nl
               << "FILE *fp;" << nl
@@ -324,6 +332,10 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
         if (isConflictResolutionEnabled) {
             *this << "cl_kernel cr_kernel = clCreateKernel(program, \"conflict_resolver\", &ret);" << nl
                   << "cr_kernels[" << deviceIter << "] = " << "cr_kernel;" << nl;
+            if (!generateForGraph) {
+                *this << "cl_kernel cra_kernel = clCreateKernel(program, \"conflict_resolver_act\", &ret);" << nl
+                      << "cra_kernels[" << deviceIter << "] = " << "cra_kernel;" << nl;
+            }
         }
 
         int tmpSizeStringCount = 0;
@@ -338,7 +350,7 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                 << "ret |= clSetKernelArg(kernel, " << tmpSizeStringCount + 3 << ", sizeof(cl_mem), &" << agentLabel
                 << "MemObjEnv);" << nl;
 
-        if (script.usesRng) {
+        if (useRNG) {
             *this  << "ret |= clSetKernelArg(kernel, " << tmpSizeStringCount + 4 << ", sizeof(cl_mem), &" << agentLabel
                                                 << "MemObjRng);" << nl;
         }
@@ -379,6 +391,36 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                     << "ret |= clSetKernelArg(cr_kernel, " << tmpSizeStringCount + 4 << ", sizeof(cl_mem), &"
                     << agentLabel
                     << "MemObjConflictFlag);" << nl;
+
+            if (!generateForGraph) {
+                *this
+                    << "ret |= clSetKernelArg(mem_kernel, " << tmpSizeStringCount + 5 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjConflictSet);" << nl
+                    << "ret |= clSetKernelArg(cr_kernel, " << tmpSizeStringCount + 5 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjConflictSet);" << nl
+                    << "ret = clSetKernelArg(cra_kernel, " << tmpSizeStringCount << ", sizeof(cl_mem), &" << agentLabel
+                    << "MemObj);" << nl
+                    << "ret |= clSetKernelArg(cra_kernel, " << tmpSizeStringCount + 1 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjDbuf);" << nl
+                    << "ret |= clSetKernelArg(cra_kernel, " << tmpSizeStringCount + 2 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjLen);" << nl
+                    << "ret |= clSetKernelArg(cra_kernel, " << tmpSizeStringCount + 3 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjEnv);" << nl
+                    << "ret |= clSetKernelArg(cra_kernel, " << tmpSizeStringCount + 4 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjConflictFlag);" << nl
+                    << "ret |= clSetKernelArg(cra_kernel, " << tmpSizeStringCount + 5 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjRng);" << nl
+                    << "ret |= clSetKernelArg(cra_kernel, " << tmpSizeStringCount + 6 << ", sizeof(cl_mem), &"
+                    << agentLabel
+                    << "MemObjConflictSet);" << nl;
+            }
         }
 
         *this << nl
@@ -396,7 +438,7 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                   << envGraphSize << ", &" << envName << ", 0, NULL, NULL);" << nl;
         }
 
-        if (script.usesRng) {
+        if (useRNG) {
             *this << "ret = clEnqueueWriteBuffer(command_queue, " << agentLabel << "MemObjRng, CL_TRUE, 0, sizeof(cl_uint2)*"
                   << bufName << ".len, rngState, 0, NULL, NULL);" << nl;
         }
@@ -538,8 +580,12 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
 
     if (isConflictResolutionEnabled) {
         *this << "ret |= clEnqueueNDRangeKernel(command_queues[0], cr_kernels[0], 1, NULL, &cr_globalWorkSize, NULL, 0, NULL, NULL);" << nl
-        << "clFinish(command_queues[0]);" << nl
-        << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjConflictFlags[0], CL_TRUE, 0, sizeof(bool),&conflictFlag, 0, NULL, NULL);" << nl
+        << "clFinish(command_queues[0]);" << nl;
+        if (!generateForGraph) {
+            *this << "ret |= clEnqueueNDRangeKernel(command_queues[0], cra_kernels[0], 1, NULL, &cr_globalWorkSize, NULL, 0, NULL, NULL);" << nl
+                  << "clFinish(command_queues[0]);" << nl;
+        }
+        *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjConflictFlags[0], CL_TRUE, 0, sizeof(bool),&conflictFlag, 0, NULL, NULL);" << nl
         << "clFinish(command_queues[0]);"
         << outdent << nl
         << "} while (conflictFlag);" << nl;
@@ -598,9 +644,17 @@ void CLHPrinter::print(const AST::AgentDeclaration &decl) {
         << *decl.members << outdent << nl;
 
   if (decl.isRealAgent) {
-      if (!generateForGraph)
+      if (!generateForGraph) {
           *this << indent << nl << "int envId;" << outdent << nl;
+      }
       *this << "}" << decl.name << ";" << nl;
+      if (isConflictResolutionEnabled && !generateForGraph){
+        *this << "typedef struct {" << indent << nl
+        << "int conflictSet[1024];" << nl
+        << "int conflictSetPointer;" << nl
+        << "int conflictSetSmallest;" << outdent << nl
+        << "}" << decl.name << "_conflict;" << nl;
+      }
   }
   else {
         *this << indent << nl
@@ -674,6 +728,11 @@ void CLHPrinter::print(const AST::Script &script) {
       generateForGraph = true;
   };
 
+  if (((!generateForGraph) && isConflictResolutionEnabled) || script.usesRng) {
+      useRNG = true;
+  } else {
+      useRNG = false;
+  }
 
   if (!envGraphSize.isInt())
       *this << "#include \"libabl.h\"" << nl ;

@@ -401,10 +401,10 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
 
         *this   << "__kernel void conflict_resolver(__global " << type << " *buff, __global " << type
                 << " *dbuff, __global int *len, __global " << envType << " *" << envName
-                << ", __global bool *isConflicted) {"
+                << ", __global bool *isConflicted, __global Point_conflict *conflictBuff) {"
                 << indent << nl;
         *this   << "int i = get_global_id(0);" << nl
-                << "if (i > *len) return;" << nl
+                << "if (i > *len-1) return;" << nl
                 << type << " " << ag1Label << "  = buff[i];" << nl;
 
         *this << "for (int " << pLabel << " = -1; " << pLabel << " < 2; " << pLabel << "++)" << nl;
@@ -431,16 +431,42 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << indent << nl
 
                 << type << " " << ag2Label << " = buff[" << jLabel << "];" << nl
-                << "if (i <" << jLabel << ") {" << indent << nl
+                << "if (i !=" << jLabel << ") {" << indent << nl
                 << "if (" << stmt.tiebreakingFuncDecl->name << "(&" << ag1Label << ", &" << ag2Label << ")) {" << indent
                 << nl
-                << "buff[i] = " << "dbuff[i];" << nl
+//                << "buff[i] = " << "dbuff[i];" << nl
+                << "if (conflictBuff[i].conflictSetPointer == 0) {" << indent << nl
+                << "conflictBuff[i].conflictSet[conflictBuff[i].conflictSetPointer] = i;" << nl
+                << "atomic_inc(&conflictBuff[i].conflictSetPointer);" << nl
+                << "conflictBuff[i].conflictSetSmallest = i;"
+                << outdent << nl << "}" << nl
+                << "conflictBuff[i].conflictSet[conflictBuff[i].conflictSetPointer] = " << jLabel << ";" << nl
+                << "if ( " << jLabel << " < conflictBuff[i].conflictSetSmallest )" << indent << nl
+                << "conflictBuff[i].conflictSetSmallest = " << jLabel << ";" << outdent << nl
+                << "atomic_inc(&conflictBuff[i].conflictSetPointer);" << nl
                 << "*isConflicted = true;"
                 << outdent << nl << "}"
                 << outdent << nl << "}"
                 << outdent << nl << "}"
                 << outdent << nl << "}"
 //                << outdent << nl << "}"
+                << outdent << nl << "}" << nl;
+
+        *this   << "__kernel void conflict_resolver_act(__global " << type << " *buff, __global " << type
+                << " *dbuff, __global int *len, __global " << envType << " *" << envName
+                << ", __global bool *isConflicted, __global uint2 *rngState, __global Point_conflict *conflictBuff) {"
+                << indent << nl;
+        std::string iterLabel = makeAnonLabel();
+        *this   << "int i = get_global_id(0);" << nl
+                << "if (i > *len-1 || i!=conflictBuff[i].conflictSetSmallest) return;" << nl
+                << "int lucky = MWC64X(&rngState[0])*conflictBuff[i].conflictSetPointer;" <<nl
+                << "int size = conflictBuff[i].conflictSetPointer;" << nl
+                << "for (size_t " << iterLabel << " = 0 ; " << iterLabel << " < size; " << iterLabel << " ++) {" << indent << nl
+                << "int index = conflictBuff[i].conflictSet[" << iterLabel << "];" << nl
+                << "if (lucky!=" << iterLabel << ") {" << indent << nl
+                << "buff[index] = dbuff[index];"
+                << outdent << nl << "}"
+                << outdent << nl << "}"
                 << outdent << nl << "}";
     }
 }
@@ -542,7 +568,7 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << " *dbuff, __global int *len, __global " << envType << " *" << envName;
 
         if (isConflictResolutionEnabled) {
-            *this <<", __global bool *isConflicted) {";
+            *this <<", __global bool *isConflicted, __global Point_conflict *conflictBuff) {";
         } else {
             *this <<") {";
         }
@@ -567,10 +593,15 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
                   << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
                   << "." << posMember->name << ".x - " <<
                   envMin.getVec3().x << ")/" << maxRadius << ");" << nl;
+        if (isConflictResolutionEnabled) {
+            *this << "conflictBuff[i].conflictSetPointer=0;" << nl
+                  << "conflictBuff[i].conflictSetSmallest=-1;" << nl;
+        }
 
         *this << "int x = buff[i].envId;" << nl
-              << nl
-              << "if (i == 0) {" << indent << nl
+              << nl;
+
+        *this << "if (i == 0) {" << indent << nl
               << envName << "[x].mem_start = 0;"
               << outdent << nl
               << "}" << nl
@@ -677,9 +708,17 @@ void CLPrinter::print(const AST::AgentDeclaration &decl) {
         << *decl.members << outdent << nl;
 
   if (decl.isRealAgent) {
-    if (!generateForGraph)
-        *this << indent << nl << "int envId;" << outdent << nl;
-    *this << "}" << decl.name << ";" << nl;
+        if (!generateForGraph) {
+            *this << indent << nl << "int envId;" << outdent << nl;
+        }
+        *this << "}" << decl.name << ";" << nl;
+        if (isConflictResolutionEnabled && !generateForGraph){
+            *this << "typedef struct {" << indent << nl
+                  << "int conflictSet[1024];" << nl
+                  << "int conflictSetPointer;" << nl
+                  << "int conflictSetSmallest;" << outdent << nl
+                  << "}" << decl.name << "_conflict;" << nl;
+        }
   }
   else {
       *this << indent << nl

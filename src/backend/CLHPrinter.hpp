@@ -52,6 +52,7 @@ private:
   Value envGraphSize;
 
   bool isConflictResolutionEnabled;
+  bool useRNG;
 };
 
 }
