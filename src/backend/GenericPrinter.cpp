@@ -91,7 +91,7 @@ void GenericPrinter::print(const AST::ArrayInitExpression &expr) {
 }
 
 void GenericPrinter::print(const AST::ArrayCreationExpression &expr) {
-  *this << expr.type << expr.var.get()->name << "[" << *expr.sizeExpr << "]";
+  *this << expr.elemType->resolved << " " << expr.var.get()->name << "[" << *expr.sizeExpr << "]";
 }
 
 void GenericPrinter::printArgs(const AST::CallExpression &expr) {

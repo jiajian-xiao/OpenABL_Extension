@@ -36,6 +36,7 @@ void registerBuiltinFunctions(FunctionList &funcs) {
   funcs.add("randomInt", "random_int", { Type::INT32, Type::INT32 }, Type::INT32);
   funcs.add("MWC64X", "MWC64X", { Type::FLOAT}, Type::FLOAT);
 
+  funcs.add("abs", { Type::FLOAT }, Type::FLOAT);
   funcs.add("sin", { Type::FLOAT }, Type::FLOAT);
   funcs.add("cos", { Type::FLOAT }, Type::FLOAT);
   funcs.add("tan", { Type::FLOAT }, Type::FLOAT);
@@ -45,6 +46,7 @@ void registerBuiltinFunctions(FunctionList &funcs) {
   funcs.add("asin", { Type::FLOAT }, Type::FLOAT);
   funcs.add("acos", { Type::FLOAT }, Type::FLOAT);
   funcs.add("atan", { Type::FLOAT }, Type::FLOAT);
+  funcs.add("atan2", { Type::FLOAT, Type::FLOAT }, Type::FLOAT);
   funcs.add("exp", { Type::FLOAT }, Type::FLOAT);
   funcs.add("log", { Type::FLOAT }, Type::FLOAT);
   funcs.add("sqrt", { Type::FLOAT }, Type::FLOAT);

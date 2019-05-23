@@ -471,33 +471,34 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
             *this << "size_t cr_globalWorkSize = globalWorkSize ;" << nl;
     }
 
-    *this << "for (int length = 1; length < globalWorkSize; length <<= 1)" << nl
-    << "for (int inc = length; inc > 0; inc >>= 1) {" << indent << nl
-    << "int dir = length << 1;" << nl
-    << "clSetKernelArg(st_kernels[0], 3, sizeof(int), &inc);" << nl
-    << "clSetKernelArg(st_kernels[0], 4, sizeof(int), &dir);" << nl
-    << "clEnqueueNDRangeKernel(command_queues[0], st_kernels[0], 1, NULL, &globalWorkSize, NULL, 0, NULL, NULL);"
-    << nl
-    << "clFinish(command_queues[0]);"
-    << outdent << nl
-    << "}" << nl
-    << "ret |= clEnqueueNDRangeKernel(command_queues[0], mem_kernels[0], 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);"
-    << nl
-    << "clFinish(command_queues[0]);" << nl;
-
-    if (num_devices > 1) {
+    if (generateForGraph) {
+        *this << "for (int length = 1; length < globalWorkSize; length <<= 1)" << nl
+              << "for (int inc = length; inc > 0; inc >>= 1) {" << indent << nl
+              << "int dir = length << 1;" << nl
+              << "clSetKernelArg(st_kernels[0], 3, sizeof(int), &inc);" << nl
+              << "clSetKernelArg(st_kernels[0], 4, sizeof(int), &dir);" << nl
+              << "clEnqueueNDRangeKernel(command_queues[0], st_kernels[0], 1, NULL, &globalWorkSize, NULL, 0, NULL, NULL);"
+              << nl
+              << "clFinish(command_queues[0]);"
+              << outdent << nl
+              << "}" << nl
+              << "ret |= clEnqueueNDRangeKernel(command_queues[0], mem_kernels[0], 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);"
+              << nl
+              << "clFinish(command_queues[0]);" << nl;
+    }
+    if (num_devices > 1 && generateForGraph) {
         *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjs[0], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
-        if (generateForGraph)
-            *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjEnvs[0], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envGraphSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
-        else
-            *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjEnvs[0], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
+//        if (generateForGraph)
+        *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjEnvs[0], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envGraphSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
+//        else
+//            *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjEnvs[0], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
 
         for (int i=1;i<num_devices;i++) {
             *this << "clEnqueueWriteBuffer(command_queues[" << i << "], " << agentLabel << "MemObjs[" << i << "], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
-            if (generateForGraph)
-                *this << "clEnqueueWriteBuffer(command_queues[" << i << "], " << agentLabel << "MemObjEnvs[" << i << "], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envGraphSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
-            else
-                *this << "clEnqueueWriteBuffer(command_queues[" << i << "], " << agentLabel << "MemObjEnvs[" << i << "], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
+//            if (generateForGraph)
+            *this << "clEnqueueWriteBuffer(command_queues[" << i << "], " << agentLabel << "MemObjEnvs[" << i << "], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envGraphSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
+//            else
+//                *this << "clEnqueueWriteBuffer(command_queues[" << i << "], " << agentLabel << "MemObjEnvs[" << i << "], CL_TRUE, 0, " << "sizeof("<< envType <<")*" << envSize << ", " << outTmpLabel << "Env" << ", 0, NULL, NULL);" << nl;
 
         }
     }
@@ -510,55 +511,62 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
     if (isConflictResolutionEnabled)
         *this << "bool conflictFlag = false;" << nl;
 
-    for (int i=0;i<num_devices;i++) {
+    for (int i=num_devices-1;i>=0;i--) {
         *this   << "ret = clEnqueueNDRangeKernel(command_queues[" << i << "], kernels[" << i << "], 1, NULL, &globalWorkSize, &localWorkSize, 0, NULL, NULL);"
                 << nl;
-    }
-    for (int i=0;i<num_devices;i++) {
         *this   << "clFinish(command_queues[" << i << "]);" << nl;
-    }
-    if (num_devices > 1) {
-        for (int i = 0; i < num_devices; i++) {
+        if (i != 0){
             *this << "clEnqueueReadBuffer(command_queues[" << i << "], " << agentLabel << "MemObjs[" << i
-                  << "], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << "buff" << i << ", 0, NULL, NULL);"
+                  << "], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << "buff0" << ", 0, NULL, NULL);"
                   << nl;
+            *this << "clEnqueueWriteBuffer(command_queues[0], " << agentLabel<< "MemObjs[0], CL_TRUE, 0," << agentLabel << "_dbuf"
+                  << ", " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
         }
-        *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjDbufs[0], CL_TRUE, 0, "
-              << agentLabel << "_dbuf, " << outTmpLabel << "Dbuff" << ", 0, NULL, NULL);" << nl;
-
-        *this << "for (int j=0;j<" << bufName  << " .len;j++){" << indent << nl;
-        *this << type << " agentOrigin = &" << outTmpLabel << "Dbuff"  << "[j];" << nl;
-        for (int i = 0; i < num_devices; i++) {
-            *this << type << " agent" << i << " = &" << outTmpLabel << "buff" << i << "[j];" << nl;
-        }
-
-        auto members =  type.getAgentDecl()->getMembers();
-        for (int i = 1; i < num_devices; i++)
-        for (auto member:members) {
-            if (!member->isPosition)
-            *this << "if (agentOrigin->" << member->name << " == agent0->"<< member->name << ") "
-                  << outTmpLabel << "buff0"<< "[j]." << member->name  << " = agent" << i << "->" << member->name << ";" << nl;
-            else {
-                if (member->type->resolved.isVec2()) {
-                    *this << "if (agentOrigin->" << member->name << ".x == agent0->"<< member->name << ".x) "
-                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".x = agent" << i << "->" << member->name << ".x;" << nl;
-                    *this << "if (agentOrigin->" << member->name << ".y == agent0->"<< member->name << ".y) "
-                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".y = agent" << i << "->" << member->name << ".y;" << nl;
-                } else {
-                    *this << "if (agentOrigin->" << member->name << ".x == agent0->"<< member->name << ".x) "
-                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".x = agent" << i << "->" << member->name << ".x;" << nl;
-                    *this << "if (agentOrigin->" << member->name << ".y == agent0->"<< member->name << ".y) "
-                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".y = agent" << i << "->" << member->name << ".y;" << nl;
-                    *this << "if (agentOrigin->" << member->name << ".z == agent0->"<< member->name << ".z) "
-                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".z = agent" << i << "->" << member->name << ".z;" << nl;
-                }
-
-            }
-        }
-        *this << outdent << nl << "}" << nl;
-        *this << "clEnqueueWriteBuffer(command_queues[0], " << agentLabel<< "MemObjs[0], CL_TRUE, 0," << agentLabel << "_dbuf"
-              << ", " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
     }
+//    for (int i=0;i<num_devices;i++) {
+//    }
+//    if (num_devices > 1) {
+//        for (int i = 0; i < num_devices; i++) {
+//            *this << "clEnqueueReadBuffer(command_queues[" << i << "], " << agentLabel << "MemObjs[" << i
+//                  << "], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << "buff" << i << ", 0, NULL, NULL);"
+//                  << nl;
+//        }
+//        *this << "clEnqueueReadBuffer(command_queues[0], " << agentLabel << "MemObjDbufs[0], CL_TRUE, 0, "
+//              << agentLabel << "_dbuf, " << outTmpLabel << "Dbuff" << ", 0, NULL, NULL);" << nl;
+
+//        *this << "for (int j=0;j<" << bufName  << " .len;j++){" << indent << nl;
+//        *this << type << " agentOrigin = &" << outTmpLabel << "Dbuff"  << "[j];" << nl;
+//        for (int i = 0; i < num_devices; i++) {
+//            *this << type << " agent" << i << " = &" << outTmpLabel << "buff" << i << "[j];" << nl;
+//        }
+//
+//        auto members =  type.getAgentDecl()->getMembers();
+//        for (int i = 1; i < num_devices; i++)
+//        for (auto member:members) {
+//            if (!member->isPosition)
+//            *this << "if (agentOrigin->" << member->name << " == agent0->"<< member->name << ") "
+//                  << outTmpLabel << "buff0"<< "[j]." << member->name  << " = agent" << i << "->" << member->name << ";" << nl;
+//            else {
+//                if (member->type->resolved.isVec2()) {
+//                    *this << "if (agentOrigin->" << member->name << ".x == agent0->"<< member->name << ".x) "
+//                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".x = agent" << i << "->" << member->name << ".x;" << nl;
+//                    *this << "if (agentOrigin->" << member->name << ".y == agent0->"<< member->name << ".y) "
+//                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".y = agent" << i << "->" << member->name << ".y;" << nl;
+//                } else {
+//                    *this << "if (agentOrigin->" << member->name << ".x == agent0->"<< member->name << ".x) "
+//                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".x = agent" << i << "->" << member->name << ".x;" << nl;
+//                    *this << "if (agentOrigin->" << member->name << ".y == agent0->"<< member->name << ".y) "
+//                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".y = agent" << i << "->" << member->name << ".y;" << nl;
+//                    *this << "if (agentOrigin->" << member->name << ".z == agent0->"<< member->name << ".z) "
+//                          << outTmpLabel << "buff0"<< "[j]." << member->name  << ".z = agent" << i << "->" << member->name << ".z;" << nl;
+//                }
+//
+//            }
+//        }
+//        *this << outdent << nl << "}" << nl;
+//        *this << "clEnqueueWriteBuffer(command_queues[0], " << agentLabel<< "MemObjs[0], CL_TRUE, 0," << agentLabel << "_dbuf"
+//              << ", " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
+//    }
 
     if (isConflictResolutionEnabled) {
         *this << "do {" << indent << nl;
@@ -695,11 +703,10 @@ void CLHPrinter::print(const AST::FunctionDeclaration &decl) {
   if (decl.isMain()) {
     // Return result code from main()
     *this << "int main() {" << indent <<nl
-    << "clock_t begin = clock();"
+    << "double wtime = omp_get_wtime();"
     << *decl.stmts << nl
-    << "clock_t end = clock();" << nl
-    << "double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;" << nl
-    << "printf(\"Time elapsed is %f seconds\\n\", time_spent);" << nl
+    << "wtime = omp_get_wtime() - wtime;" << nl
+    << "printf(\"Time elapsed is %f seconds\\n\", wtime);" << nl
     << "return 0;" << outdent << nl << "}";
     return;
   }
@@ -742,6 +749,7 @@ void CLHPrinter::print(const AST::Script &script) {
   *this << "#include \"time.h\"" << nl ;
   *this << "#include \"stdio.h\"" << nl ;
   *this << "#include \"CL/cl.h\"" << nl << nl;
+  *this << "#include \"omp.h\"" << nl << nl;
 
 
   // First declare all agents

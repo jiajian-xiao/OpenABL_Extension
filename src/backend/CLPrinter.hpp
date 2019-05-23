@@ -50,9 +50,11 @@ struct CLPrinter : public GenericCPrinter {
 
   void printType(Type t);
 
+public:
+    bool useFloat;
+
 private:
   AST::Script &script;
-  bool useFloat;
   std::string envName;
   std::string envType;
   Value envSize;

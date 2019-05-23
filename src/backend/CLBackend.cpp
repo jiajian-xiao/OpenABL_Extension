@@ -21,9 +21,9 @@ namespace OpenABL {
 
 static std::string generateBuildScript(bool useFloat) {
   if (useFloat) {
-    return "gcc -O2 -std=c99 -DLIBABL_USE_FLOAT=1 main.c libabl.c -lm -lOpenCL -o main";
+    return "gcc -O2 -std=c99 -DLIBABL_USE_FLOAT=1 main.c libabl.c -lm -lOpenCL -fopenmp -o main";
   } else {
-    return "gcc -O2 -std=c99 main.c libabl.c -lm -lOpenCL -o main";
+    return "gcc -O2 -std=c99 main.c libabl.c -lm -lOpenCL -fopenmp -o main";
   }
 }
 

@@ -76,7 +76,10 @@ static void printTypeCtor(CLPrinter &p, const AST::CallExpression &expr) {
 //        p << "}";
 //    }
   } else {
-    p << "(" << t << ") " << *(*expr.args)[0];
+      if (t.isFloat() && !p.useFloat)
+        p << "( double ) " << *(*expr.args)[0];
+      else
+        p << "(" << t << ") " << *(*expr.args)[0];
   }
 }
 void CLPrinter::print(const AST::CallExpression &expr) {
@@ -102,6 +105,14 @@ void CLPrinter::print(const AST::CallExpression &expr) {
         *this << "length_flo2" << "(";
     else if (sig.name == "length_float3")
         *this << "length_flo3" << "(";
+    else if (sig.name == "normalize_float2")
+        *this << "normalize_flo2" << "(";
+    else if (sig.name == "normalize_float3")
+        *this << "normalize_flo3" << "(";
+    else if (sig.name == "dot_float2")
+        *this << "dot_flo2" << "(";
+    else if (sig.name == "dot_float3")
+        *this << "dot_flo3" << "(";
     else if (sig.name == "MWC64X")
         *this << "(MWC64X" << "(&rngState[agentIId])*";
     else
@@ -230,17 +241,17 @@ void CLPrinter::print(const AST::VarDeclarationStatement &stmt) {
 }
 
 //print initialisation
-//static void printRangeFor(CLPrinter &p, const AST::ForStatement &stmt) {
-//  std::string eLabel = p.makeAnonLabel();
-//  auto range = stmt.getRange();
-//  p << "for (int " << *stmt.var << " = " << range.first
-//    << ", " << eLabel << " = " << range.second << "; "
-//    << *stmt.var << " < " << eLabel << "; ++" << *stmt.var << ") " << *stmt.stmt;
-//}
+static void printRangeFor(CLPrinter &p, const AST::ForStatement &stmt) {
+  std::string eLabel = p.makeAnonLabel();
+  auto range = stmt.getRange();
+  p << "for (int " << *stmt.var << " = " << range.first
+    << ", " << eLabel << " = " << range.second << "; "
+    << *stmt.var << " < " << eLabel << "; ++" << *stmt.var << ") " << *stmt.stmt;
+}
 
 void CLPrinter::print(const AST::ForStatement &stmt) {
   if (stmt.isRange()) {
-//    printRangeFor(*this, stmt);
+    printRangeFor(*this, stmt);
     return;
   } else if (stmt.isNear()) {
       //interpret Near
@@ -266,6 +277,8 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
     std::string pLabel = makeAnonLabel();
     std::string qLabel = makeAnonLabel();
     std::string rLabel = makeAnonLabel();
+    std::string memStartLabel = makeAnonLabel();
+    std::string memEndLabel = makeAnonLabel();
 
       // For now: Print normal loop with radius check
     *this << "for (int " << pLabel << " = -1; " << pLabel << " < 2; " << pLabel << "++)" << nl;
@@ -283,12 +296,13 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
         << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << indent << nl;
 
     *this << "int envId = " << agentExpr << "->envId + "<<pLabel<<" + "<<qLabel<<" + "<<rLabel<<";" << nl;
-    *this << "if ( envId >= 0 && envId < " << max_par_size << " )" <<nl;
-
-    *this << "if ("<< envName << "[envId].mem_start !=" << envName << "[envId].mem_end)" << nl;
+    *this << "if ( envId >= 0 && envId < " << max_par_size << " )" << nl << "{" << indent <<nl;
+    *this << "int "<< memStartLabel << " = " << envName << "[envId].mem_start;" <<nl;
+    *this << "int "<< memEndLabel <<  " = " << envName << "[envId].mem_end;" <<nl;
+    *this << "if ("<< memStartLabel << " != " << memEndLabel << ")" << nl;
     *this << "for (size_t " << iLabel << " = "
-        << envName << "[envId].mem_start;"
-        << iLabel << " < " << envName << "[envId].mem_end+1;"
+        << memStartLabel << ";"
+        << iLabel << " < " << memEndLabel << ";"
         << iLabel << "++) {"
         << indent << nl ;
     printStorageType(*this, stmt.type->resolved);
@@ -299,6 +313,8 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
           << ") continue;" << nl
           << *stmt.stmt << outdent << nl << "}";
     *this << outdent << nl <<"}" << nl;
+    *this << outdent << nl <<"}" << nl;
+
     return;
   } else if (stmt.isOn()) {
       //interpret Near
@@ -318,7 +334,7 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
       *this << "if ("<<agentExpr << "->mem_start !="<< agentExpr << "->mem_end)" << nl;
       *this << "for (size_t " << iLabel << " = "
             << agentExpr << "->mem_start;"
-            << iLabel << " < " << agentExpr << "->mem_end+1;"
+            << iLabel << " < " << agentExpr << "->mem_end;"
             << iLabel << "++) {"
             << indent << nl ;
       printStorageType(*this, stmt.type->resolved);
@@ -372,9 +388,9 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << envType << " " << envLabel << " = " << envName << "[" << "i" << "];" << nl
                 <<  "if (" <<  envLabel << ".mem_start !=" <<envLabel << ".mem_end)" << nl
                 << "for (size_t " << iLabel << " = " << envLabel << ".mem_start;" << iLabel << " < " << envLabel
-                << ".mem_end+1; " << iLabel << "++)" << nl
+                << ".mem_end; " << iLabel << "++)" << nl
                 << "for (size_t " << jLabel << " = " << envLabel << ".mem_start;" << jLabel << " < " << envLabel
-                << ".mem_end+1; " << jLabel << "++) {" << indent << nl
+                << ".mem_end; " << jLabel << "++) {" << indent << nl
                 << "if (" << iLabel << "!=" << jLabel << ") {" << indent << nl
                 << type << " " << ag1Label << " = buff[" << iLabel << "];" << nl
                 << type << " " << ag2Label << " = buff[" << jLabel << "];" << nl
@@ -426,7 +442,7 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
                 << "if (" << envName << "[envId].mem_start != "<< envName << "[envId].mem_end)"<<nl
                 << "for (size_t " << jLabel << " = "
                 << envName << "[envId].mem_start;"
-                << jLabel << " < " << envName << "[envId].mem_end+1;"
+                << jLabel << " < " << envName << "[envId].mem_end;"
                 << jLabel << "++) {"
                 << indent << nl
 
@@ -577,28 +593,29 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << "int i = get_global_id(0);" << nl
               << "if (i>*len-1) return;" << nl;
 
-        std::string dbufLabel = "buff[i]";
-        if (envMin.isVec2())
-            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".y - "
-                  << envMin.getVec2().y << ")/" << maxRadius
-                  << ") * " << "((int)(" << envSize.getVec2().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                  << "." << posMember->name << ".x - " <<
-                  envMin.getVec2().x << ")/" << maxRadius << ");" << nl;
-        else if (envMin.isVec3())
-            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".z - "
-                  << envMin.getVec3().z << ")/" << maxRadius
-                  << ") * " << "((int)(" << envSize.getVec3().z << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                  << "." << posMember->name << ".y - " <<
-                  envMin.getVec3().y << ")/" << maxRadius
-                  << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                  << "." << posMember->name << ".x - " <<
-                  envMin.getVec3().x << ")/" << maxRadius << ");" << nl;
+//        std::string dbufLabel = "buff[i]";
+//        if (envMin.isVec2())
+//            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".y - "
+//                  << envMin.getVec2().y << ")/" << maxRadius
+//                  << ") * " << "((int)(" << envSize.getVec2().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+//                  << "." << posMember->name << ".x - " <<
+//                  envMin.getVec2().x << ")/" << maxRadius << ");" << nl;
+//        else if (envMin.isVec3())
+//            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".z - "
+//                  << envMin.getVec3().z << ")/" << maxRadius
+//                  << ") * " << "((int)(" << envSize.getVec3().z << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+//                  << "." << posMember->name << ".y - " <<
+//                  envMin.getVec3().y << ")/" << maxRadius
+//                  << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+//                  << "." << posMember->name << ".x - " <<
+//                  envMin.getVec3().x << ")/" << maxRadius << ");" << nl;
         if (isConflictResolutionEnabled) {
             *this << "conflictBuff[i].conflictSetPointer=0;" << nl
                   << "conflictBuff[i].conflictSetSmallest=-1;" << nl;
         }
 
         *this << "int x = buff[i].envId;" << nl
+              << "int y = buff[i-1].envId;" << nl
               << nl;
 
         *this << "if (i == 0) {" << indent << nl
@@ -606,12 +623,12 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << outdent << nl
               << "}" << nl
               << "else if (i < *len) {" << indent << nl
-              << "if (x != buff[i-1].envId) {" << indent << nl
-              << envName << "[buff[i-1].envId].mem_end = i - 1;" << nl
+              << "if (x != y) {" << indent << nl
+              << envName << "[y].mem_end = i;" << nl
               << envName << "[x].mem_start = i;" << outdent << nl
               << "}" << nl
               << "if (i==*len-1) {" << indent << nl
-              << envName << "[x].mem_end = *len-1;"
+              << envName << "[x].mem_end = *len;"
               << outdent << nl
               << "}"
               << outdent << nl
@@ -658,18 +675,19 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
               << "int i = get_global_id(0);" << nl
               << "if (i>*len-1) return;" << nl
               << "int x = buff[i]." << posMember->name << ".x;" << nl
+              << "int y = buff[i-1]." << posMember->name << ".x;" << nl
               << nl
               << "if (i == 0) {" << indent << nl
               << envName << "[x].mem_start = 0;"
               << outdent << nl
               << "}" << nl
               << "else if (i < *len) {" << indent << nl
-              << "if (x != buff[i-1]." << posMember->name << ".x) {" << indent << nl
-              << envName << "[buff[i-1]." << posMember->name <<".x].mem_end = i - 1;" << nl
+              << "if (x != y) {" << indent << nl
+              << envName << "[y].mem_end = i;" << nl
               << envName << "[x].mem_start = i;" << outdent << nl
               << "}" << nl
               << "if (i==*len-1) {" << indent << nl
-              << envName << "[x].mem_end = *len-1;"
+              << envName << "[x].mem_end = *len;"
               << outdent << nl
               << "}"
               << outdent << nl
@@ -741,7 +759,6 @@ void CLPrinter::print(const AST::FunctionDeclaration &decl) {
         return;
     }
 
-    //
     const std::string &name = supportsOverloads ? decl.name : decl.sig.name;
     if (decl.isAnyStep()) {
         const AST::Param &param = *(*decl.params)[0];
@@ -757,7 +774,34 @@ void CLPrinter::print(const AST::FunctionDeclaration &decl) {
     } else
         *this << *decl.returnType << " " << name << "(" ;
     printParams(decl);
-    *this << ") {" << indent << *decl.stmts << outdent << nl << "}";
+    *this << ") {" << indent << *decl.stmts << nl;
+    if (!generateForGraph && decl.isAnyStep()) {
+        const AST::Param &param = *(*decl.params)[0];
+        Type type = param.type->resolved;
+
+        AST::AgentDeclaration *agentDecl = type.getAgentDecl();
+        AST::AgentMember *posMember = agentDecl->getPositionMember();
+
+        std::string dbufLabel = "out->";
+        if (envMin.isVec2())
+            *this << dbufLabel << "envId = (int)((" << dbufLabel << "" << posMember->name << ".y - "
+                  << envMin.getVec2().y << ")/" << maxRadius
+                  << ") * " << "((int)(" << envSize.getVec2().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "" << posMember->name << ".x - " <<
+                  envMin.getVec2().x << ")/" << maxRadius << ");";
+        else if (envMin.isVec3())
+            *this << dbufLabel << "envId = (int)((" << dbufLabel << "" << posMember->name << ".z - "
+                  << envMin.getVec3().z << ")/" << maxRadius
+                  << ") * " << "((int)(" << envSize.getVec3().z << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "" << posMember->name << ".y - " <<
+                  envMin.getVec3().y << ")/" << maxRadius
+                  << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "" << posMember->name << ".x - " <<
+                  envMin.getVec3().x << ")/" << maxRadius << ");";
+        *this << outdent << nl << "}";
+    } else {
+        *this << outdent << nl << "}";
+    }
 }
 
 void CLPrinter::print(const AST::ConstDeclaration &decl) {

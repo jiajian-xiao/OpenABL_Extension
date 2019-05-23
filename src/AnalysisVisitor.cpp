@@ -426,9 +426,9 @@ void AnalysisVisitor::leave(AST::ConstDeclaration &decl) {
     Type elemType = decl.type->resolved;
     decl.type->resolved = { Type::ARRAY, elemType };
 
-//    if (!handleArrayInitializer(err, *decl.expr, elemType)) {
-//      return;
-//    }
+    if (!handleArrayInitializer(err, *decl.expr, elemType)) {
+      return;
+    }
 //
 //    // TODO This should be migrated to evalExpression(). Right now the rules for constant
 //    // expressions in arrays are different from everywhere else
@@ -618,11 +618,11 @@ void AnalysisVisitor::enter(AST::ForStatement &stmt) {
         return;
       }
 
-      if (currentFunc->accessedAgent) {
-        // TODO relax?
-        err << "Multiple for-near loops in a single step function" << stmt.loc;
-        return;
-      }
+//      if (currentFunc->accessedAgent) {
+//        // TODO relax?
+//        err << "Multiple for-near loops in a single step function" << stmt.loc;
+//        return;
+//      }
 
       AST::AgentDeclaration *agent = declType.getAgentDecl();
 //      if (!agent->getPositionMember()) {
@@ -643,11 +643,11 @@ void AnalysisVisitor::enter(AST::ForStatement &stmt) {
         return;
       }
 
-      if (currentFunc->accessedAgent) {
-        // TODO relax?
-        err << "Multiple for-near loops in a single step function" << stmt.loc;
-        return;
-      }
+//      if (currentFunc->accessedAgent) {
+//        // TODO relax?
+//        err << "Multiple for-near loops in a single step function" << stmt.loc;
+//        return;
+//      }
 
       AST::AgentDeclaration *agent = declType.getAgentDecl();
 //      if (!agent->getPositionMember()) {
@@ -1250,18 +1250,27 @@ void AnalysisVisitor::leave(AST::EnvironmentAccessExpression &expr) {
 
 void AnalysisVisitor::leave(AST::ArrayAccessExpression &expr) {
   Type arrayT = expr.arrayExpr->type;
-  if (!arrayT.isArray()) {
-    err << "Can only index into arrays" << expr.arrayExpr->loc;
-    return;
-  }
+  if (arrayT.isAgent()){
+      expr.type = arrayT;
+      Type offsetT = expr.offsetExpr->type;
+      if (!offsetT.isInt()) {
+          err << "Array offset must be an integer" << expr.offsetExpr->loc;
+          return;
+      }
+  } else {
+      if (!arrayT.isArray()) {
+          err << "Can only index into arrays" << expr.arrayExpr->loc;
+          return;
+      }
 
-  Type offsetT = expr.offsetExpr->type;
-  if (!offsetT.isInt()) {
-    err << "Array offset must be an integer" << expr.offsetExpr->loc;
-    return;
-  }
+      Type offsetT = expr.offsetExpr->type;
+      if (!offsetT.isInt()) {
+          err << "Array offset must be an integer" << expr.offsetExpr->loc;
+          return;
+      }
 
-  expr.type = arrayT.getBaseType();
+      expr.type = arrayT.getBaseType();
+  }
 }
 
 static std::vector<Type> getArgTypes(const AST::CallExpression &expr) {
