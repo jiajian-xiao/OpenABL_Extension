@@ -1,0 +1,238 @@
+/* Copyright 2017 OpenABL Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License. */
+
+agent Point {
+  position float2 pos;
+  float desiredSpeed;
+  float2 velocity;
+  bool isFinished;
+  int leader;
+  int id;
+  float2 target;
+}
+
+// Number of timesteps
+param int num_timesteps = 100;
+// Number of agents
+param int num_agents = 1024;
+
+param float T = 0.54;
+// Density of agents
+param float rho = 0.05;
+// Radius of agent (radius of repulsion)
+param float r = 2;
+
+param float lambda = 2.0; // Weight reflecting relative importance of velocity vector against position vector
+param float gamma = 0.35;  // Speed interaction
+param float n_prime = 3.0;  // Angular interaction
+param float n = 2.0;    // Angular intaraction
+param float A = 4.5;    // Modal parameter A
+param int aa = 3;
+param float bb = 0.1;
+param float stepTime = 0.25;
+// Choose environment size to satisfy given
+// number of agents and density
+float W = sqrt(num_agents / rho);
+
+// Specify environment size
+environment { max: float2(W) }
+
+int dijkstra(int n, int startnode, int endnode)
+{
+
+    int cost[10000];
+    int distance[100];
+    int pred[100];
+    int visited[100];
+    int count = 0;
+    int mindistance = 0;
+    int nextnode = 0;
+
+    //pred[] stores the predecessor of each node
+    //count gives the number of nodes seen so far
+    //create the cost matrix
+    for (int i : 0..int(n)){
+      for (int j : 0..int(n)){
+        if (i-j==1 || j-i==1)
+          cost[((i * int(n)) + j)] = 1;
+        else
+          cost[((i * int(n)) + j)] = 32767;
+      } 
+    }
+    for (int i : 0..int(n)){
+      distance[i]=cost[int(startnode)*int(n)+i];
+      pred[i]=startnode;
+      visited[i]=0;
+    }
+    distance[int(startnode)]=0;
+    visited[int(startnode)]=1;
+    count=1;
+    while(count<int(n)-1)
+    {
+        mindistance=32767;
+
+        //nextnode gives the node at minimum distance
+        for (int i : 0..int(n)){
+            if(distance[i]<mindistance && !bool(visited[i]))
+            {
+                mindistance=distance[i];
+                nextnode=i;
+            }
+        }    
+        //check if a better path exists through nextnode
+        visited[nextnode]=1;
+        for (int i : 0..int(n)){
+          if(!bool(visited[i])){
+            if(mindistance+cost[nextnode*int(n)+i]<distance[i])
+            {
+                distance[i]=mindistance+cost[nextnode*int(n)+i];
+                pred[i]=nextnode;
+            }
+          }
+        }
+        count = count+1;
+    }
+    int j=int(endnode);
+    while(pred[j]!=int(startnode))
+    {
+      j=pred[j];
+    }
+    return j;
+}
+
+step compute_leader_route(Point in -> out) {
+  if (in.isFinished || in.leader != in.id) return;
+
+  float width = W/10;
+  int current = int(in.pos.x/width)*10 + int(in.pos.y/width) + 1;
+  int dd = dijkstra(100,current,1);
+  float yy = ((dd/10)+1)*(width/2);
+  float xx = (dd%10)*(width/2);
+  float2 e_i = float2(xx, yy);
+  out.target = e_i;
+}
+// Step function
+step move_all_point(Point in -> out) {
+  if (in.isFinished) return;
+  float2 new_pos = in.pos;
+  // Compute Desired Direction
+  // Formula: e_i = (position_target - position_i) / ||(position_target - position_i)||
+  // float2 target = float2(1,1);
+  if (in.leader != in.id) {
+    float x = MWC64X(W);
+    float y = MWC64X(W);
+    in.target = float2(x,y);
+    for (Point nx : near(in, 5.0*r)) {
+      if (nx.isFinished) continue;
+      if (nx.id == nx.leader){
+        in.target = nx.pos;
+        break;
+      }
+    }
+  }
+
+  float2 e_i = in.target - in.pos;
+  e_i = normalize(e_i);
+
+  // Compute Driving Force
+  // Formula: f_i = ((desiredSpeed * e_i) - velocity_i) / T
+  float2 f_i = ((in.desiredSpeed * e_i) - in.velocity) * (1 / T);
+
+  float2 f_ij = float2(0, 0);
+  for (Point nx : near(in, 1.0*r)) {
+    if (nx.isFinished) continue;
+
+    float2 distance_ij = nx.pos - in.pos;
+    if (length(distance_ij) == 0) continue;
+
+    // Compute Direction of Agent j from i
+    // Formula: e_ij = (position_j - position_i) / ||position_j - position_i||
+    float2 e_ij = distance_ij;
+    e_ij = normalize(e_ij);
+
+    // Compute Interaction Vector Between Agent i and j
+    // Formula: D = lambda * (velocity_i - velocity_j) + e_ij
+    float2 D_ij = lambda * (in.velocity - nx.velocity) + e_ij;
+
+    // Compute Modal Parameter B
+    // Formula: B = gamma * ||D_ij||
+    float B = gamma * length(D_ij);
+
+    // Compute Interaction Direction
+    // Formula: t_ij = D_ij / ||D_ij||
+    float2 t_ij = D_ij;
+    t_ij = normalize(t_ij);
+
+    // Compute Angle Between Interaction Direction (t_ij) and Vector Pointing from Agent i to j (e_ij)
+    float dot = dot(t_ij, e_ij);
+    float det = t_ij.x*e_ij.y - t_ij.y*e_ij.x;
+    float theta = atan2(det, dot); 
+
+    // Compute Sign of Angle 'theta'
+    // Formula: K = theta / |theta|
+    int K = 0;
+    if (theta < 0)
+      K = -1;
+    else if (theta > 0)
+      K = 1;
+    else
+      K = 0;
+    // Compute Amount of Deceleration
+    // Formula: f_v = -A * exp(-distance_ij / B - ((n_prime * B * theta) * (n_prime * B * theta)))
+    float f_v = -A * exp(-length(distance_ij) / B - ((n_prime * B * theta) * (n_prime * B * theta)));
+
+    // Compute Amount of Directional Changes
+    // Formula: f_theta = -A * K * exp(-distance_ij / B - ((n * B * theta) * (n * B * theta)))
+    float f_theta = -A * K * exp(-length(distance_ij) / B - ((n * B * theta) * (n * B * theta)));
+
+    // Compute Normal Vector of Interaction Direction Oriented to the Left
+    float2 n_ij = float2(-t_ij.y, t_ij.x);
+
+    // Compute Interaction Force
+    // Formula: f_ij = f_v * t_ij + f_theta * n_ij
+    f_ij += f_v * t_ij + f_theta * n_ij;
+  }
+  float2 f_iw = float2(min(in.pos.x, W-in.pos.x), min(in.pos.y, W-in.pos.y));
+  float d_w = min(min(in.pos.y, W-in.pos.y),min(in.pos.x, W-in.pos.x));
+  float f_wv = aa * exp(-d_w / bb);
+  f_iw = f_wv*normalize(f_iw);
+
+  float2 force = f_i+f_ij+f_iw;
+  out.velocity = in.velocity+force*stepTime;
+  if (length(out.velocity)>in.desiredSpeed)
+    out.velocity = normalize(out.velocity)*in.desiredSpeed;
+  out.pos = new_pos+out.velocity*stepTime;
+  // out.pos = clam(new_pos,float2(1), float2(W-1));
+  if (new_pos.x <= 1 && new_pos.y<=10)
+    out.isFinished = true;
+}
+
+void main() {
+  // initialization (sequential)
+  for (int i : 0..num_agents) {
+    add(Point {
+      pos: random(float2(W)),
+      desiredSpeed: random(0.1,0.5),
+      velocity: float2(0,0),
+      id:i,
+      leader:128*(i/128),
+      isFinished:false,
+      target: float2(1,1)
+    });
+  }
+
+  // simulation (parallel)
+  simulate(num_timesteps) { compute_leader_route(1), move_all_point(0) }
+  //save("points.json");
+}
