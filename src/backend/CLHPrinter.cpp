@@ -242,6 +242,15 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
         }
     }
 
+    *this << nl << "char fileName[] = \"kernel.cl\";" << nl
+          << "char *source_str;" << nl
+          << "size_t source_size;" << nl
+          << "FILE *fp;" << nl
+          << "fp = fopen(fileName, \"r\");" << nl
+          << "source_str = (char*)malloc(0x100000);" << nl
+          << "source_size = fread(source_str, 1, 0x100000, fp);" << nl
+          << "fclose(fp);" << nl;
+
     std::string deviceIter = "deviceIter";
 
     *this << "for (int " << deviceIter << " = 0 ; " << deviceIter << " < " << num_devices << " ; " << deviceIter << "++){" << indent << nl;
@@ -306,14 +315,15 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                   << agentLabel <<"MemObjRngs[" << deviceIter << "] = " << agentLabel << "MemObjRng;";
         }
 
-        *this << nl << "char fileName[] = \"kernel.cl\";" << nl
-              << "char *source_str;" << nl
-              << "size_t source_size;" << nl
-              << "FILE *fp;" << nl
-              << "fp = fopen(fileName, \"r\");" << nl
-              << "source_str = (char*)malloc(0x100000);" << nl
-              << "source_size = fread(source_str, 1, 0x100000, fp);" << nl
-              << "fclose(fp);" << nl
+        *this << nl
+//        << nl << "char fileName[] = \"kernel.cl\";" << nl
+//              << "char *source_str;" << nl
+//              << "size_t source_size;" << nl
+//              << "FILE *fp;" << nl
+//              << "fp = fopen(fileName, \"r\");" << nl
+//              << "source_str = (char*)malloc(0x100000);" << nl
+//              << "source_size = fread(source_str, 1, 0x100000, fp);" << nl
+//              << "fclose(fp);" << nl
               << "cl_program program = clCreateProgramWithSource(context, 1, (const char **)&source_str, NULL, &ret);"
               << nl
               << "ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);" << nl
