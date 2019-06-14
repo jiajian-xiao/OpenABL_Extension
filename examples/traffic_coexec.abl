@@ -29,7 +29,7 @@ Lane {
 }
 
 param int num_timesteps = 100;
-param int num_agents = 512;
+param int num_agents = 8192;
 
 param float dt = 250;
 param float size = 3.5;
@@ -231,7 +231,7 @@ bool tie_breaking(Point ag1, Point ag2){
 void main() {
   // initialisation
     int lan = 1;
-    int posit = 4;
+    float posit = 4;
     for (int i : 0..num_agents) {
         add(Point {
             velocity:1,
@@ -239,7 +239,7 @@ void main() {
             id: i,
             isFinished:false
         });
-        posit = posit + 4;
+        posit = posit + 4.0 + random(1.0);
         if (posit > 200) {
             posit = 0;
             lan = lan +1;

@@ -25,7 +25,7 @@ agent Point {
 // Number of timesteps
 param int num_timesteps = 100;
 // Number of agents
-param int num_agents = 1024;
+param int num_agents = 262144;
 
 param float T = 0.54;
 // Density of agents

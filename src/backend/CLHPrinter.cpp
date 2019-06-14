@@ -531,6 +531,11 @@ void CLHPrinter::print(const AST::SimulateStatement &stmt) {
                   << nl;
             *this << "clEnqueueWriteBuffer(command_queues[0], " << agentLabel<< "MemObjs[0], CL_TRUE, 0," << agentLabel << "_dbuf"
                   << ", " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
+            *this << "clEnqueueReadBuffer(command_queues[" << i << "], " << agentLabel << "MemObjDbufs[" << i
+                  << "], CL_TRUE, 0, " << agentLabel << "_dbuf, " << outTmpLabel << "buff0" << ", 0, NULL, NULL);"
+                  << nl;
+            *this << "clEnqueueWriteBuffer(command_queues[0], " << agentLabel<< "MemObjDbufs[0], CL_TRUE, 0," << agentLabel << "_dbuf"
+                  << ", " << outTmpLabel << "buff0" << ", 0, NULL, NULL);" << nl;
         }
     }
 //    for (int i=0;i<num_devices;i++) {

@@ -543,8 +543,10 @@ void CLPrinter::print(const AST::SimulateStatement &stmt) {
             }
         }
 
-        *this << "buff[" << idLabel << "] = " << dbufLabel << ";" << nl
-              << "dbuff[" << idLabel << "] = " << bufLabel << ";";
+        *this << "buff[" << idLabel << "] = " << dbufLabel << ";" << nl;
+
+        if (!(num_devices>1 && i==0))
+            *this << "dbuff[" << idLabel << "] = " << bufLabel << ";";
 
         *this << outdent << nl << "}" << nl;
     }
