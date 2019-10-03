@@ -742,8 +742,8 @@ void CLHPrinter::print(const AST::Script &script) {
                     ((int) (script.envDecl->envSize.getVec2().y / radius) + 1);
       } else if (script.envDecl->envSize.isVec3()) {
           envSize = ((int) (script.envDecl->envSize.getVec3().x / radius) + 1) *
-                    ((int) (script.envDecl->envSize.getVec3().y / radius) + 1)
-                    * ((int) (script.envDecl->envSize.getVec3().z / radius) + 1);
+                    ((int) (script.envDecl->envSize.getVec3().y / radius) + 1) *
+                    ((int) (script.envDecl->envSize.getVec3().z / radius) + 1);
       }
       generateForGraph = false;
   } else {

@@ -283,17 +283,20 @@ void CLPrinter::print(const AST::ForStatement &stmt) {
       // For now: Print normal loop with radius check
     *this << "for (int " << pLabel << " = -1; " << pLabel << " < 2; " << pLabel << "++)" << nl;
     if (envSize.isVec2())
-        *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec2().y << "/" << maxRadius
-        << ")+1); " << qLabel << " < ((int)(" << envSize.getVec2().y << "/" << maxRadius
-        << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().y << "/" << maxRadius << "+1))) {" << indent << nl
-        << "int " << rLabel << " = 0;" << nl;
+      *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec2().x << "/" << maxRadius
+            << ")+1); " << qLabel << " < ((int)(" << envSize.getVec2().x << "/" << maxRadius
+            << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().x << "/" << maxRadius << "+1))) {" << indent << nl
+            << "int " << rLabel <<" = 0;" << nl;
     else if (envSize.isVec3())
-        *this << "for (int " << rLabel << " = - ((int)(" << envSize.getVec3().z << "/" << maxRadius
-        << ")+1); " << rLabel << " < ((int)(" << envSize.getVec3().z << "/" << maxRadius
-        << ")+1)+1 ; "<< rLabel << " =  " << rLabel <<" + ((int)(" << envSize.getVec3().z << "/" << maxRadius << "+1)))" << nl
-        << "for (int "<< qLabel << " = - ((int)(" << envSize.getVec3().y << "/" << maxRadius
-        << ")+1); " << qLabel << " < ((int)(" << envSize.getVec3().y << "/" << maxRadius
-        << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << indent << nl;
+      *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec3().x << "/" << maxRadius
+            << ")+1); " << qLabel << " < ((int)(" << envSize.getVec3().x << "/" << maxRadius
+            << ")+1)+1 ; "<< qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().x << "/" << maxRadius << "+1)))" << nl
+            << "for (int "<< rLabel << " = - ((int)(" << envSize.getVec3().y << "/" << maxRadius
+            << ")+1) * ((int)(" << envSize.getVec3().y << "/" << maxRadius
+            << ")+1); "  << rLabel << " < ((int)(" << envSize.getVec3().y << "/" << maxRadius
+            << ")+1) * ((int)(" << envSize.getVec3().y << "/" << maxRadius
+            << ")+1) +1; " << rLabel << " =  " << rLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1)) * ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {"
+            << indent << nl;
 
     *this << "int envId = " << agentExpr << "->envId + "<<pLabel<<" + "<<qLabel<<" + "<<rLabel<<";" << nl;
     *this << "if ( envId >= 0 && envId < " << max_par_size << " )" << nl << "{" << indent <<nl;
@@ -425,17 +428,20 @@ void CLPrinter::print(const AST::ConflictResolutionStatement &stmt){
 
         *this << "for (int " << pLabel << " = -1; " << pLabel << " < 2; " << pLabel << "++)" << nl;
         if (envSize.isVec2())
-            *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec2().y << "/" << maxRadius
-                  << ")+1); " << qLabel << " < ((int)(" << envSize.getVec2().y << "/" << maxRadius
-                  << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().y << "/" << maxRadius << "+1))) {" << indent << nl
+            *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec2().x << "/" << maxRadius
+                  << ")+1); " << qLabel << " < ((int)(" << envSize.getVec2().x << "/" << maxRadius
+                  << ")+1)+1 ; " << qLabel << " =  " << qLabel << " + ((int)(" << envSize.getVec2().x << "/" << maxRadius << "+1))) {" << indent << nl
                   << "int " << rLabel <<" = 0;" << nl;
         else if (envSize.isVec3())
-            *this << "for (int " << rLabel << " = - ((int)(" << envSize.getVec3().z << "/" << maxRadius
-                  << ")+1); " << rLabel << " < ((int)(" << envSize.getVec3().z << "/" << maxRadius
-                  << ")+1)+1 ; "<< rLabel << " =  " << rLabel <<" + ((int)(" << envSize.getVec3().z << "/" << maxRadius << "+1)))" << nl
-                  << "for (int "<< qLabel << " = - ((int)(" << envSize.getVec3().y << "/" << maxRadius
-                  << ")+1); " << qLabel << " < ((int)(" << envSize.getVec3().y << "/" << maxRadius
-                  << ")+1)+1 ; " << qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {" << indent<< nl;
+            *this << "for (int " << qLabel << " = - ((int)(" << envSize.getVec3().x << "/" << maxRadius
+                  << ")+1); " << qLabel << " < ((int)(" << envSize.getVec3().x << "/" << maxRadius
+                  << ")+1)+1 ; "<< qLabel << " =  " << qLabel <<" + ((int)(" << envSize.getVec3().x << "/" << maxRadius << "+1)))" << nl
+                  << "for (int "<< rLabel << " = - ((int)(" << envSize.getVec3().y << "/" << maxRadius
+                  << ")+1) * ((int)(" << envSize.getVec3().y << "/" << maxRadius
+                  << ")+1); "  << rLabel << " < ((int)(" << envSize.getVec3().y << "/" << maxRadius
+                  << ")+1) * ((int)(" << envSize.getVec3().y << "/" << maxRadius
+                  << ")+1) +1; " << rLabel << " =  " << rLabel <<" + ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1)) * ((int)(" << envSize.getVec3().y << "/" << maxRadius << "+1))) {"
+                  << indent << nl;
 
         *this   << "int envId = " << ag1Label << ".envId + "<<pLabel<<" + "<<qLabel<<" + "<<rLabel<<";" << nl
                 << "if ( envId > 0 && envId < " << max_par_size << " )" <<nl
@@ -786,20 +792,23 @@ void CLPrinter::print(const AST::FunctionDeclaration &decl) {
 
         std::string dbufLabel = "out->";
         if (envMin.isVec2())
-            *this << dbufLabel << "envId = (int)((" << dbufLabel << "" << posMember->name << ".y - "
+            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".y - "
                   << envMin.getVec2().y << ")/" << maxRadius
-                  << ") * " << "((int)(" << envSize.getVec2().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                  << "" << posMember->name << ".x - " <<
+                  << ") * " << "((int)(" << envSize.getVec2().x << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "." << posMember->name << ".x - " <<
                   envMin.getVec2().x << ")/" << maxRadius << ");";
         else if (envMin.isVec3())
-            *this << dbufLabel << "envId = (int)((" << dbufLabel << "" << posMember->name << ".z - "
+            *this << dbufLabel << ".envId = (int)((" << dbufLabel << "." << posMember->name << ".z - "
                   << envMin.getVec3().z << ")/" << maxRadius
-                  << ") * " << "((int)(" << envSize.getVec3().z << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                  << "" << posMember->name << ".y - " <<
+                  << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) * ((int)("
+                  << envSize.getVec3().x << "/" <<  maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "." << posMember->name << ".y - " <<
                   envMin.getVec3().y << ")/" << maxRadius
-                  << ") * " << "((int)(" << envSize.getVec3().y << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
-                  << "" << posMember->name << ".x - " <<
+                  << ") * " << "((int)(" << envSize.getVec3().x << "/" << maxRadius << ")+1) + (int)((" << dbufLabel
+                  << "." << posMember->name << ".x - " <<
                   envMin.getVec3().x << ")/" << maxRadius << ");";
+
+
         *this << outdent << nl << "}";
     } else {
         *this << outdent << nl << "}";
